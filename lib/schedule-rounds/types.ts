@@ -1,8 +1,15 @@
+import type { GaRunSummary } from "@/lib/ga-runs/types";
+import type { CompensationSummaryData } from "@/lib/compensation/types";
+import type { ManualScheduleData } from "@/lib/manual-schedule/types";
+
 export type AdminTabId =
   | "system-overview"
   | "user-management"
   | "schedule-data"
-  | "schedule-rounds";
+  | "schedule-rounds"
+  | "compensation"
+  | "manual-schedule"
+  | "ga-settings";
 
 export type AdminTab = {
   id: AdminTabId;
@@ -54,6 +61,12 @@ export type ScheduleRoundRow = {
   monthLabel: string;
   status: ScheduleRoundStatus;
   statusLabel: string;
+  requestOpenDate: string;
+  requestCloseDate: string;
+  dataLockDate: string;
+  autoGenerateAt: string;
+  holidayDates: string[];
+  holidayDateLabels: string;
   submittedWards: number;
   totalWards: number;
   requestOpenDateLabel: string;
@@ -61,6 +74,17 @@ export type ScheduleRoundRow = {
   dataLockDateLabel: string;
   autoGenerateAtLabel: string;
   createdAtLabel: string;
+  latestGaRun: GaRunSummary | null;
+  hasActiveGaRun: boolean;
+  wardOptions: ScheduleRoundWardOption[];
+};
+
+export type ScheduleRoundWardOption = {
+  id: string;
+  code: string;
+  name: string;
+  status: WardPreparationStatus;
+  statusLabel: string;
 };
 
 export type ScheduleRoundsData = {
@@ -141,3 +165,39 @@ export type UserManagementData = {
   users: UserManagementRow[];
   wards: UserManagementWard[];
 };
+
+export type GaSettingsData = {
+  profileKey: string;
+  profileName: string;
+  isActive: boolean;
+  populationSize: number;
+  generations: number;
+  patience: number;
+  eliteSize: number;
+  tournamentSize: number;
+  crossoverRate: number;
+  mutationRate: number;
+  fullRepairEvery: number;
+  repairEliteEvery: number;
+  randomSeed: number | null;
+  maxSeconds: number;
+  maxShiftsPer7Days: number;
+  weeklyMinDaysOff: number;
+  maxConsecutiveNights: number;
+  maxConsecutiveWorkDays: number;
+  maxTraineePerShift: number;
+  minRestHours: number;
+  workloadBalanceMaxDiff: number;
+  shiftCountBalanceMaxDiff: number;
+  shiftTypeBalanceMaxDiff: number;
+  targetOffDaysPerStaff: number | null;
+  enableMorningEveningDouble: boolean;
+  enableNightEveningDouble: boolean;
+  preferMorningOt: boolean;
+  morningRegularRequired: boolean;
+  updatedAtLabel: string;
+  source: "database" | "default";
+};
+
+export type { CompensationSummaryData };
+export type { ManualScheduleData };

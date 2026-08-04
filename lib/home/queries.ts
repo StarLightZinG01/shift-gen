@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/auth/session";
+import { splitShiftCode } from "@/lib/manual-schedule/validation";
 
 import type {
   HomeAdminDashboardData,
@@ -14,10 +15,13 @@ type PublishedAssignment = {
   workDate: Date;
   shiftCode: string;
   isOt: boolean;
+  otShifts: string | null;
   ward: {
     code: string;
   };
 };
+
+const visibleScheduleStatuses = ["published", "draft"] as const;
 
 export async function getHomeDashboardData(
   session: SessionPayload | null,
@@ -134,7 +138,16 @@ async function getUserHomeDashboardData(
 ): Promise<HomeUserDashboardData> {
   const displayName = session?.displayName ?? "";
   const role = getHomeRole(session?.roles ?? []);
-  const staff = session?.staffId
+  const staff = session?.userId
+    ? await prisma.staff.findUnique({
+        where: {
+          userId: session.userId,
+        },
+        include: {
+          homeWard: true,
+        },
+      })
+    : session?.staffId
     ? await prisma.staff.findUnique({
         where: {
           id: session.staffId,
@@ -146,26 +159,71 @@ async function getUserHomeDashboardData(
     : null;
 
   const today = startOfDay(new Date());
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const nextSevenDaysEnd = addDays(today, 7);
-  const publishedVersion = await prisma.scheduleVersion.findFirst({
-    where: {
-      OR: [
-        {
-          status: "published",
-        },
-        {
-          publishedAt: {
-            not: null,
+  const [staffVersions, wardVersions] = staff
+    ? await Promise.all([
+        prisma.scheduleVersion.findMany({
+          where: {
+            status: {
+              in: [...visibleScheduleStatuses],
+            },
+            assignments: {
+              some: {
+                staffId: staff.id,
+              },
+            },
           },
-        },
-      ],
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+          include: {
+            cycle: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 12,
+        }),
+        prisma.scheduleVersion.findMany({
+          where: {
+            status: {
+              in: [...visibleScheduleStatuses],
+            },
+            assignments: {
+              some: {
+                wardId: staff.homeWardId,
+              },
+            },
+          },
+          include: {
+            cycle: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 12,
+        }),
+      ])
+    : [[], []];
+  const selectedVersion =
+    sortVisibleVersions(staffVersions)[0] ??
+    sortVisibleVersions(wardVersions)[0] ??
+    null;
+  const scheduleMonthStart = selectedVersion
+    ? new Date(
+        normalizeYear(selectedVersion.cycle.year),
+        selectedVersion.cycle.month - 1,
+        1,
+      )
+    : new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextScheduleMonthStart = selectedVersion
+    ? new Date(
+        normalizeYear(selectedVersion.cycle.year),
+        selectedVersion.cycle.month,
+        1,
+      )
+    : new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const upcomingStart =
+    today >= scheduleMonthStart && today < nextScheduleMonthStart
+      ? today
+      : scheduleMonthStart;
+  const nextSevenDaysEnd = addDays(upcomingStart, 7);
   const latestCycle = await prisma.scheduleCycle.findFirst({
     orderBy: [
       {
@@ -178,14 +236,14 @@ async function getUserHomeDashboardData(
   });
 
   const assignments =
-    staff && publishedVersion
+    staff && selectedVersion
       ? await prisma.scheduleAssignment.findMany({
           where: {
-            scheduleVersionId: publishedVersion.id,
+            scheduleVersionId: selectedVersion.id,
             staffId: staff.id,
             workDate: {
-              gte: monthStart,
-              lt: nextMonthStart,
+              gte: scheduleMonthStart,
+              lt: nextScheduleMonthStart,
             },
           },
           include: {
@@ -202,13 +260,13 @@ async function getUserHomeDashboardData(
       : [];
 
   const upcomingAssignments =
-    staff && publishedVersion
+    staff && selectedVersion
       ? await prisma.scheduleAssignment.findMany({
           where: {
-            scheduleVersionId: publishedVersion.id,
+            scheduleVersionId: selectedVersion.id,
             staffId: staff.id,
             workDate: {
-              gte: today,
+              gte: upcomingStart,
               lt: nextSevenDaysEnd,
             },
           },
@@ -226,10 +284,10 @@ async function getUserHomeDashboardData(
       : [];
 
   const requestCount =
-    staff && latestCycle
+    staff && (selectedVersion?.cycle ?? latestCycle)
       ? await prisma.availabilityRequest.count({
           where: {
-            cycleId: latestCycle.id,
+            cycleId: (selectedVersion?.cycle ?? latestCycle)!.id,
             staffId: staff.id,
           },
         })
@@ -238,7 +296,16 @@ async function getUserHomeDashboardData(
   const todayAssignment = upcomingAssignments.find(
     (assignment) => startOfDay(assignment.workDate).getTime() === today.getTime(),
   );
-  const shiftCounts = countShifts(assignments);
+  const actualScheduleCounts = countActualSchedule({
+    assignments,
+    daysInMonth: selectedVersion
+      ? new Date(
+          normalizeYear(selectedVersion.cycle.year),
+          selectedVersion.cycle.month,
+          0,
+        ).getDate()
+      : 0,
+  });
   const todayShift = mapTodayShift(todayAssignment, staff?.homeWard.code ?? "-");
 
   return {
@@ -246,23 +313,25 @@ async function getUserHomeDashboardData(
     displayName,
     role,
     wardLabel: staff ? `${staff.homeWard.code} ${staff.homeWard.name}` : null,
-    monthLabel: formatMonthYear(today.getMonth() + 1, today.getFullYear() + 543),
+    monthLabel: selectedVersion
+      ? formatMonthYear(selectedVersion.cycle.month, selectedVersion.cycle.year)
+      : formatMonthYear(today.getMonth() + 1, today.getFullYear() + 543),
     summaryCards: [
       {
         label: "จำนวนเวรของฉันในเดือนนี้",
-        value: assignments.length.toString(),
+        value: actualScheduleCounts.shiftCount.toString(),
         unit: "เวร",
         tone: "white",
       },
       {
         label: "จำนวน off ของเดือนนี้",
-        value: shiftCounts.off.toString(),
+        value: actualScheduleCounts.offDays.toString(),
         unit: "วัน",
         tone: "white",
       },
       {
         label: "จำนวน OT เดือนนี้",
-        value: assignments.filter((assignment) => assignment.isOt).length.toString(),
+        value: actualScheduleCounts.otCount.toString(),
         unit: "เวร",
         tone: "white",
       },
@@ -289,13 +358,13 @@ async function getUserHomeDashboardData(
           time: "ยังไม่มีรอบจัดตาราง",
         },
     todayShift,
-    upcomingDays: buildUpcomingDays(today, upcomingAssignments),
+    upcomingDays: buildUpcomingDays(upcomingStart, upcomingAssignments),
     emptyMessage: !staff
       ? "บัญชีนี้ยังไม่ได้ผูกกับข้อมูลบุคลากรหรือวอร์ด"
-      : !publishedVersion
+      : !selectedVersion
         ? "ยังไม่มีตารางเวรที่เผยแพร่ให้แสดง"
         : assignments.length === 0
-          ? "ยังไม่มีเวรของคุณในเดือนนี้"
+          ? "มีตารางเวรแล้ว แต่ยังไม่มีรายการเวรของคุณในรอบนี้"
           : null,
   };
 }
@@ -312,20 +381,85 @@ function getHomeRole(roles: string[]): HomeRole {
   return "nurse";
 }
 
-function countShifts(assignments: PublishedAssignment[]) {
-  return assignments.reduce(
-    (counts, assignment) => {
-      const shift = normalizeShiftCode(assignment.shiftCode);
-      counts[shift] += 1;
-      return counts;
-    },
-    {
-      night: 0,
-      morning: 0,
-      afternoon: 0,
-      off: 0,
-    },
-  );
+function countActualSchedule({
+  assignments,
+  daysInMonth,
+}: {
+  assignments: PublishedAssignment[];
+  daysInMonth: number;
+}) {
+  const nonOffDays = new Set<number>();
+  let shiftCount = 0;
+  let otCount = 0;
+
+  for (const assignment of assignments) {
+    const workUnits = countWorkUnits(assignment.shiftCode);
+
+    if (workUnits > 0 || isNonOffNote(assignment.shiftCode)) {
+      nonOffDays.add(assignment.workDate.getDate());
+    }
+
+    shiftCount += workUnits;
+    otCount += countOtUnits(assignment);
+  }
+
+  return {
+    shiftCount,
+    offDays: Math.max(daysInMonth - nonOffDays.size, 0),
+    otCount,
+  };
+}
+
+function countWorkUnits(shiftCode: string) {
+  const value = normalizePlainShiftCode(shiftCode);
+
+  if (value === "V" || value === "ล") {
+    return 0;
+  }
+
+  if (value === "ว") {
+    return 1;
+  }
+
+  return splitShiftCode(stripInlineOt(shiftCode)).length;
+}
+
+function isNonOffNote(shiftCode: string) {
+  const value = normalizePlainShiftCode(shiftCode);
+  return value === "V" || value === "ว" || value === "ล";
+}
+
+function countOtUnits(assignment: PublishedAssignment) {
+  const explicitOtParts = splitShiftCode(stripInlineOt(assignment.otShifts ?? ""));
+
+  if (explicitOtParts.length > 0) {
+    return explicitOtParts.length;
+  }
+
+  const inlineOtParts = parseInlineOtShiftParts(assignment.shiftCode);
+
+  if (inlineOtParts.length > 0) {
+    return inlineOtParts.length;
+  }
+
+  return assignment.isOt ? splitShiftCode(stripInlineOt(assignment.shiftCode)).length : 0;
+}
+
+function parseInlineOtShiftParts(shiftCode: string) {
+  return shiftCode
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => /ot$/i.test(part))
+    .map((part) => stripInlineOt(part))
+    .filter(Boolean);
+}
+
+function stripInlineOt(value: string) {
+  return value.replace(/ot/gi, "").trim();
+}
+
+function normalizePlainShiftCode(value: string) {
+  return stripInlineOt(value).trim().replace(/\s/g, "");
 }
 
 function mapTodayShift(
@@ -390,17 +524,17 @@ function buildUpcomingDays(
 }
 
 function normalizeShiftCode(shiftCode: string): "night" | "morning" | "afternoon" | "off" {
-  const value = shiftCode.toLowerCase();
+  const value = shiftCode.toLowerCase().trim().replace(/\s/g, "");
 
-  if (["n", "night", "ดึก"].includes(value)) {
+  if (value.includes("ด") || ["n", "night", "ดึก"].includes(value)) {
     return "night";
   }
 
-  if (["m", "morning", "เช้า"].includes(value)) {
+  if (value.includes("ช") || ["m", "morning", "เช้า"].includes(value)) {
     return "morning";
   }
 
-  if (["a", "afternoon", "บ่าย"].includes(value)) {
+  if (value.includes("บ") || ["a", "afternoon", "บ่าย"].includes(value)) {
     return "afternoon";
   }
 
@@ -457,6 +591,31 @@ function formatCycleStatus(status: string) {
   };
 
   return labels[status] ?? status;
+}
+
+function sortVisibleVersions<
+  T extends {
+    status: string;
+    createdAt: Date;
+  },
+>(versions: T[]) {
+  return [...versions].sort((a, b) => {
+    const statusPriority =
+      versionStatusPriority(a.status) - versionStatusPriority(b.status);
+    if (statusPriority !== 0) {
+      return statusPriority;
+    }
+
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+}
+
+function versionStatusPriority(status: string) {
+  return status === "published" ? 0 : 1;
+}
+
+function normalizeYear(year: number) {
+  return year > 2400 ? year - 543 : year;
 }
 
 function startOfDay(date: Date) {

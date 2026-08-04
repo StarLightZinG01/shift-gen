@@ -165,8 +165,9 @@ async function getExistingLeaveRequests(
   });
 
   return requests.map((request) => ({
-    date: request.requestDate.getDate(),
+    date: request.requestDate.getUTCDate(),
     type: normalizeRequestType(request.requestType),
+    preferredShift: normalizePreferredShift(request.preferredShift),
     reason: request.reason ?? "",
   }));
 }
@@ -196,11 +197,19 @@ function getPageMessage({
 }
 
 function normalizeRequestType(type: string): LeaveRequestType {
-  if (type === "Off" || type === "V" || type === "ว" || type === "ล") {
+  if (type === "Off" || type === "V" || type === "ว" || type === "ล" || type === "PreferredShift") {
     return type;
   }
 
   return "Off";
+}
+
+function normalizePreferredShift(value: string | null) {
+  if (value === "ช" || value === "บ" || value === "ด" || value === "ช/บ" || value === "ด/บ") {
+    return value;
+  }
+
+  return "";
 }
 
 function toCalendarYear(year: number) {

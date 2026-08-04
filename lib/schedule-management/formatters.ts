@@ -9,6 +9,7 @@ export function formatRequestDate(date: Date) {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   }).format(date);
 }
 
@@ -32,6 +33,26 @@ export function formatMonthYear(month: number, year: number) {
   return `${thaiMonths[month - 1] ?? "ไม่ระบุเดือน"} ${displayYear}`;
 }
 
+export function formatHolidayList(
+  holidays: Array<{ date: Date; label: string | null }>,
+) {
+  if (holidays.length === 0) {
+    return "ยังไม่ได้กำหนดวันหยุดนักขัตฤกษ์";
+  }
+
+  return holidays
+    .map((holiday) => {
+      const dateLabel = new Intl.DateTimeFormat("th-TH", {
+        day: "numeric",
+        month: "short",
+        timeZone: "UTC",
+      }).format(holiday.date);
+
+      return holiday.label ? `${dateLabel} (${holiday.label})` : dateLabel;
+    })
+    .join(", ");
+}
+
 export function formatDateRange(start: Date | null, end: Date | null) {
   if (!start || !end) {
     return "วันที่ 1-20 (mock)";
@@ -49,7 +70,7 @@ export function formatDateTime(date: Date | null) {
 }
 
 function formatThaiDay(date: Date) {
-  return `วันที่ ${date.getDate()}`;
+  return `วันที่ ${date.getUTCDate()}`;
 }
 
 function formatThaiTime(date: Date) {

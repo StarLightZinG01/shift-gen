@@ -49,6 +49,8 @@ export function CreateScheduleRoundDialog({
   const [requestCloseDate, setRequestCloseDate] = useState("");
   const [dataLockDate, setDataLockDate] = useState("");
   const [autoGenerateAt, setAutoGenerateAt] = useState("");
+  const [holidayDates, setHolidayDates] = useState<string[]>([]);
+  const [holidayInput, setHolidayInput] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function resetForm() {
@@ -58,6 +60,24 @@ export function CreateScheduleRoundDialog({
     setRequestCloseDate("");
     setDataLockDate("");
     setAutoGenerateAt("");
+    setHolidayDates([]);
+    setHolidayInput("");
+  }
+
+  function addHolidayDate() {
+    if (!holidayInput || holidayDates.includes(holidayInput)) {
+      setHolidayInput("");
+      return;
+    }
+
+    setHolidayDates((current) =>
+      [...current, holidayInput].sort((a, b) => a.localeCompare(b)),
+    );
+    setHolidayInput("");
+  }
+
+  function removeHolidayDate(date: string) {
+    setHolidayDates((current) => current.filter((item) => item !== date));
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -71,6 +91,7 @@ export function CreateScheduleRoundDialog({
         requestCloseDate,
         dataLockDate,
         autoGenerateAt,
+        holidayDates,
       });
 
       if (result.status === "error") {
@@ -91,7 +112,7 @@ export function CreateScheduleRoundDialog({
         <DialogHeader className="border-b px-6 pt-6 pb-4">
           <DialogTitle>สร้างรอบจัดตาราง</DialogTitle>
           <DialogDescription>
-            กำหนดรอบจัดตารางรายเดือนและช่วงเวลาที่แต่ละวอร์ดต้องส่งข้อมูล
+            กำหนดรอบจัดตารางรายเดือน ช่วงเวลารับคำขอ และวันหยุดนักขัตฤกษ์ของรอบนี้
           </DialogDescription>
         </DialogHeader>
 
@@ -167,6 +188,14 @@ export function CreateScheduleRoundDialog({
               />
             </Field>
           </div>
+
+          <HolidayEditor
+            holidayDates={holidayDates}
+            holidayInput={holidayInput}
+            onHolidayInputChange={setHolidayInput}
+            onAddHoliday={addHolidayDate}
+            onRemoveHoliday={removeHolidayDate}
+          />
         </form>
 
         <DialogFooter className="border-t bg-white px-6 py-4">
@@ -189,6 +218,72 @@ export function CreateScheduleRoundDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function HolidayEditor({
+  holidayDates,
+  holidayInput,
+  onHolidayInputChange,
+  onAddHoliday,
+  onRemoveHoliday,
+}: {
+  holidayDates: string[];
+  holidayInput: string;
+  onHolidayInputChange: (value: string) => void;
+  onAddHoliday: () => void;
+  onRemoveHoliday: (date: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border bg-[#F8FDFE] p-4">
+      <Label>วันหยุดนักขัตฤกษ์ของรอบนี้</Label>
+      <p className="mt-1 text-xs text-muted-foreground">
+        เลือกวันที่หยุดที่อยู่ในเดือนของรอบจัดตาราง ระบบจะนำไปใช้ตอนสร้างข้อมูลเข้า GA
+      </p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <Input
+          type="date"
+          value={holidayInput}
+          onChange={(event) => onHolidayInputChange(event.target.value)}
+          className="rounded-md bg-white"
+        />
+        <Button type="button" variant="outline" onClick={onAddHoliday}>
+          เพิ่มวันหยุด
+        </Button>
+      </div>
+      {holidayDates.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {holidayDates.map((date) => (
+            <button
+              key={date}
+              type="button"
+              className="rounded-full border border-brand/20 bg-brand/10 px-3 py-1 text-xs font-medium text-brand hover:bg-brand/15"
+              onClick={() => onRemoveHoliday(date)}
+            >
+              {formatDateInputLabel(date)} x
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-muted-foreground">
+          ยังไม่ได้เพิ่มวันหยุดนักขัตฤกษ์
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatDateInputLabel(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 function Field({

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { getCurrentSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
+const preferredShiftCodes = ["ช", "บ", "ด", "ช/บ", "ด/บ"] as const;
+
 export type SaveLeaveRequestsResult =
   | {
       status: "success";
@@ -21,11 +23,22 @@ const saveLeaveRequestsSchema = z.object({
   wardId: z.string().uuid("ไม่พบวอร์ดที่ถูกต้อง"),
   requests: z
     .array(
-      z.object({
-        date: z.coerce.number().int().min(1).max(31),
-        type: z.enum(["Off", "V", "ว", "ล"]),
-        reason: z.string().trim().max(500).optional(),
-      }),
+      z
+        .object({
+          date: z.coerce.number().int().min(1).max(31),
+          type: z.enum(["Off", "V", "ว", "ล", "PreferredShift"]),
+          preferredShift: z.enum(preferredShiftCodes).optional().or(z.literal("")),
+          reason: z.string().trim().max(500).optional(),
+        })
+        .superRefine((request, context) => {
+          if (request.type === "PreferredShift" && !request.preferredShift) {
+            context.addIssue({
+              code: "custom",
+              message: "กรุณาเลือกกะสำหรับวันที่อยากเข้าเวร",
+              path: ["preferredShift"],
+            });
+          }
+        }),
     )
     .min(1, "กรุณาเลือกวันที่ต้องการส่งคำขอ"),
 });
@@ -114,8 +127,10 @@ export async function saveLeaveRequestsAction(
         data: requests.map((request) => ({
           cycleId,
           staffId: staff.id,
-          requestDate: new Date(calendarYear, cycle.month - 1, request.date),
+          requestDate: createDateOnly(calendarYear, cycle.month, request.date),
           requestType: request.type,
+          preferredShift:
+            request.type === "PreferredShift" ? request.preferredShift || null : null,
           reason: request.reason?.trim() || null,
           status: "submitted",
         })),
@@ -137,4 +152,8 @@ export async function saveLeaveRequestsAction(
         error instanceof Error ? error.message : "ไม่สามารถส่งคำขอได้",
     };
   }
+}
+
+function createDateOnly(year: number, month: number, day: number) {
+  return new Date(Date.UTC(year, month - 1, day));
 }

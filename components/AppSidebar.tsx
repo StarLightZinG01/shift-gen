@@ -129,6 +129,8 @@ type AppSidebarItemProps = {
 };
 
 function AppSidebarItem({ item, isActive }: AppSidebarItemProps) {
+  const icon = iconByUrl[item.url] ?? Calendar03Icon;
+
   return (
     <SidebarMenuItem className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
       <SidebarMenuButton
@@ -138,7 +140,7 @@ function AppSidebarItem({ item, isActive }: AppSidebarItemProps) {
       >
         <Link href={item.url}>
           <HugeiconsIcon
-            icon={iconByUrl[item.url]}
+            icon={icon}
             size={18}
             strokeWidth={1.7}
           />

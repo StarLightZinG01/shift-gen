@@ -1,7 +1,20 @@
 import { prisma } from "@/lib/prisma";
+import {
+  isActiveGaRunStatus,
+  mapGaRunSummary,
+} from "@/lib/ga-runs/queries";
+import {
+  getGaSettingsData,
+  getGaSettingsProfiles,
+} from "@/lib/schedule-rounds/ga-settings";
+import { getCompensationSummary } from "@/lib/compensation/queries";
+import { getManualScheduleData } from "@/lib/manual-schedule/queries";
 
 import type {
+  CompensationSummaryData,
+  GaSettingsData,
   LatestScheduleRound,
+  ManualScheduleData,
   OverviewStat,
   ScheduleDataOverview,
   ScheduleRoundRow,
@@ -18,9 +31,21 @@ type ScheduleRoundsDashboardData = {
   userManagement: UserManagementData;
   scheduleRounds: ScheduleRoundsData;
   scheduleData: ScheduleDataOverview;
+  gaSettings: GaSettingsData;
+  gaSettingsProfiles: GaSettingsData[];
+  compensation: CompensationSummaryData;
+  manualSchedule: ManualScheduleData;
 };
 
-export async function getScheduleRoundsDashboardData(): Promise<ScheduleRoundsDashboardData> {
+export async function getScheduleRoundsDashboardData({
+  compensationVersionId,
+  manualVersionId,
+  manualWardId,
+}: {
+  compensationVersionId?: string;
+  manualVersionId?: string;
+  manualWardId?: string;
+} = {}): Promise<ScheduleRoundsDashboardData> {
   const latestCycle = await prisma.scheduleCycle.findFirst({
     orderBy: [
       {
@@ -43,6 +68,10 @@ export async function getScheduleRoundsDashboardData(): Promise<ScheduleRoundsDa
     userManagement,
     scheduleRounds,
     scheduleData,
+    gaSettings,
+    gaSettingsProfiles,
+    compensation,
+    manualSchedule,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.staff.count({
@@ -87,6 +116,13 @@ export async function getScheduleRoundsDashboardData(): Promise<ScheduleRoundsDa
     getUserManagementData(),
     getScheduleRoundsData(),
     getScheduleDataOverview(),
+    getGaSettingsData(),
+    getGaSettingsProfiles(),
+    getCompensationSummary(compensationVersionId),
+    getManualScheduleData({
+      versionId: manualVersionId,
+      wardId: manualWardId,
+    }),
   ]);
 
   const pendingWards = Math.max(totalWards - submittedWards, 0);
@@ -154,6 +190,10 @@ export async function getScheduleRoundsDashboardData(): Promise<ScheduleRoundsDa
     userManagement,
     scheduleRounds,
     scheduleData,
+    gaSettings,
+    gaSettingsProfiles,
+    compensation,
+    manualSchedule,
   };
 }
 
@@ -262,7 +302,35 @@ export async function getScheduleRoundsData(): Promise<ScheduleRoundsData> {
         preparations: {
           select: {
             status: true,
+            ward: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
           },
+          orderBy: {
+            ward: {
+              code: "asc",
+            },
+          },
+        },
+        gaRuns: {
+          select: {
+            id: true,
+            status: true,
+            generationCount: true,
+            objective: true,
+            fitness: true,
+            createdAt: true,
+            startedAt: true,
+            finishedAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
         },
       },
       orderBy: [
@@ -277,8 +345,14 @@ export async function getScheduleRoundsData(): Promise<ScheduleRoundsData> {
     prisma.ward.count(),
   ]);
 
+  const holidaysByCycleId = await getHolidayDatesByCycleId(
+    rounds.map((round) => round.id),
+  );
+
   return {
-    rounds: rounds.map((round) => mapScheduleRoundRow(round, totalWards)),
+    rounds: rounds.map((round) =>
+      mapScheduleRoundRow(round, totalWards, holidaysByCycleId.get(round.id) ?? []),
+    ),
     totalWards,
   };
 }
@@ -294,13 +368,32 @@ function mapScheduleRoundRow(
     dataLockDate: Date | null;
     autoGenerateAt: Date | null;
     createdAt: Date;
-    preparations: Array<{ status: string }>;
+    preparations: Array<{
+      status: string;
+      ward: {
+        id: string;
+        code: string;
+        name: string;
+      };
+    }>;
+    gaRuns: Array<{
+      id: string;
+      status: string;
+      generationCount: number | null;
+      objective: unknown;
+      fitness: unknown;
+      createdAt: Date;
+      startedAt: Date | null;
+      finishedAt: Date | null;
+    }>;
   },
   totalWards: number,
+  holidays: Array<{ date: Date; label: string | null }>,
 ): ScheduleRoundRow {
   const submittedWards = round.preparations.filter((preparation) =>
     ["submitted", "ready"].includes(preparation.status),
   ).length;
+  const latestGaRun = round.gaRuns[0] ? mapGaRunSummary(round.gaRuns[0]) : null;
 
   return {
     id: round.id,
@@ -309,6 +402,12 @@ function mapScheduleRoundRow(
     monthLabel: formatScheduleMonthYear(round.month, round.year),
     status: normalizeScheduleRoundStatus(round.status),
     statusLabel: formatCycleStatus(round.status),
+    requestOpenDate: toDateInputValue(round.requestOpenDate),
+    requestCloseDate: toDateInputValue(round.requestCloseDate),
+    dataLockDate: toDateInputValue(round.dataLockDate),
+    autoGenerateAt: toDateTimeInputValue(round.autoGenerateAt),
+    holidayDates: holidays.map((holiday) => toDateInputValue(holiday.date)),
+    holidayDateLabels: formatHolidayDateLabels(holidays),
     submittedWards,
     totalWards,
     requestOpenDateLabel: formatDateLabel(round.requestOpenDate),
@@ -316,7 +415,55 @@ function mapScheduleRoundRow(
     dataLockDateLabel: formatDateLabel(round.dataLockDate),
     autoGenerateAtLabel: formatDateTimeLabel(round.autoGenerateAt),
     createdAtLabel: formatDateTimeLabel(round.createdAt),
+    latestGaRun,
+    hasActiveGaRun: latestGaRun ? isActiveGaRunStatus(latestGaRun.status) : false,
+    wardOptions: round.preparations.map((preparation) => {
+      const status = normalizePreparationStatus(preparation.status);
+
+      return {
+        id: preparation.ward.id,
+        code: preparation.ward.code,
+        name: preparation.ward.name,
+        status,
+        statusLabel: formatPreparationStatus(status),
+      };
+    }),
   };
+}
+
+type ScheduleRoundHolidayRow = {
+  cycle_id: string;
+  holiday_date: Date;
+  label: string | null;
+};
+
+async function getHolidayDatesByCycleId(cycleIds: string[]) {
+  const result = new Map<string, Array<{ date: Date; label: string | null }>>();
+
+  if (cycleIds.length === 0) {
+    return result;
+  }
+
+  await Promise.all(
+    cycleIds.map(async (cycleId) => {
+      const rows = await prisma.$queryRaw<ScheduleRoundHolidayRow[]>`
+        SELECT cycle_id, holiday_date, label
+        FROM schedule_cycle_holidays
+        WHERE cycle_id = ${cycleId}::uuid
+        ORDER BY holiday_date ASC
+      `;
+
+      result.set(
+        cycleId,
+        rows.map((row) => ({
+          date: row.holiday_date,
+          label: row.label,
+        })),
+      );
+    }),
+  );
+
+  return result;
 }
 
 async function getUserManagementData(): Promise<UserManagementData> {
@@ -483,6 +630,7 @@ function formatDateLabel(date: Date | null) {
 
   return new Intl.DateTimeFormat("th-TH", {
     dateStyle: "medium",
+    timeZone: "UTC",
   }).format(date);
 }
 
@@ -495,4 +643,28 @@ function formatDateTimeLabel(date: Date | null) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function toDateInputValue(date: Date | null) {
+  return date ? date.toISOString().slice(0, 10) : "";
+}
+
+function toDateTimeInputValue(date: Date | null) {
+  return date ? date.toISOString().slice(0, 16) : "";
+}
+
+function formatHolidayDateLabels(holidays: Array<{ date: Date; label: string | null }>) {
+  if (holidays.length === 0) {
+    return "-";
+  }
+
+  return holidays
+    .map((holiday) =>
+      new Intl.DateTimeFormat("th-TH", {
+        day: "numeric",
+        month: "short",
+        timeZone: "UTC",
+      }).format(holiday.date),
+    )
+    .join(", ");
 }

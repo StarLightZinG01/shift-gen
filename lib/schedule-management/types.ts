@@ -14,6 +14,10 @@ export type CycleContext = {
   requestCloseDate: Date | null;
   dataLockDate: Date | null;
   autoGenerateAt: Date | null;
+  holidays: Array<{
+    date: Date;
+    label: string | null;
+  }>;
 };
 
 export type StaffRow = {
@@ -30,6 +34,8 @@ export type StaffRow = {
   off: string;
   vacation: string;
   leave: string;
+  academic: string;
+  preferredShifts: string;
   isHead: boolean;
   isTrainee: boolean;
 };
@@ -52,6 +58,7 @@ export type RequestSummaryRow = {
   staffCode: string;
   displayName: string;
   requestType: string;
+  preferredShift: string | null;
   requestDate: Date;
   reason: string;
 };

@@ -11,6 +11,8 @@ import type {
   UserManagementRow,
 } from "@/lib/schedule-rounds/types";
 
+type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 export type SaveManagedUserResult =
   | {
       status: "success";
@@ -196,6 +198,7 @@ export async function saveManagedUserAction(
           ],
         },
       });
+      const previousHomeWardId = existingStaff?.homeWardId ?? null;
 
       const staffData = {
         userId: user.id,
@@ -242,6 +245,21 @@ export async function saveManagedUserAction(
         });
       }
 
+      await syncStaffToCurrentCycleSnapshot(tx, {
+        staffId: staff.id,
+        staffCode: staff.staffCode,
+        fullName: staff.fullName,
+        homeWardId,
+        previousHomeWardId,
+        allowedWardIds,
+        position: staff.position,
+        payPosition: staff.payPosition,
+        otRate: staff.otRate.toString(),
+        shiftPayRate: staff.shiftPayRate.toString(),
+        isHead: staff.isHead,
+        isTrainee: staff.isTrainee,
+      });
+
       return user.id;
     });
 
@@ -263,6 +281,155 @@ export async function saveManagedUserAction(
       user: null,
     };
   }
+}
+
+async function syncStaffToCurrentCycleSnapshot(
+  tx: TransactionClient,
+  input: {
+    staffId: string;
+    staffCode: string;
+    fullName: string;
+    homeWardId: string;
+    previousHomeWardId: string | null;
+    allowedWardIds: string[];
+    position: string | null;
+    payPosition: string | null;
+    otRate: string;
+    shiftPayRate: string;
+    isHead: boolean;
+    isTrainee: boolean;
+  },
+) {
+  const cycle =
+    (await tx.scheduleCycle.findFirst({
+      where: {
+        status: {
+          in: ["preparing", "open", "locked"],
+        },
+      },
+      orderBy: [
+        {
+          year: "desc",
+        },
+        {
+          month: "desc",
+        },
+      ],
+    })) ??
+    (await tx.scheduleCycle.findFirst({
+      orderBy: [
+        {
+          year: "desc",
+        },
+        {
+          month: "desc",
+        },
+      ],
+    }));
+
+  if (!cycle) {
+    return;
+  }
+
+  if (input.previousHomeWardId && input.previousHomeWardId !== input.homeWardId) {
+    const previousPreparation = await tx.wardCyclePreparation.findUnique({
+      where: {
+        cycleId_wardId: {
+          cycleId: cycle.id,
+          wardId: input.previousHomeWardId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (previousPreparation) {
+      await tx.wardStaffSnapshot.deleteMany({
+        where: {
+          wardCycleId: previousPreparation.id,
+          staffId: input.staffId,
+        },
+      });
+    }
+  }
+
+  const preparation = await tx.wardCyclePreparation.findUnique({
+    where: {
+      cycleId_wardId: {
+        cycleId: cycle.id,
+        wardId: input.homeWardId,
+      },
+    },
+    select: {
+      id: true,
+      _count: {
+        select: {
+          staffSnapshots: true,
+        },
+      },
+    },
+  });
+
+  if (!preparation || preparation._count.staffSnapshots === 0) {
+    return;
+  }
+
+  const wards = await tx.ward.findMany({
+    where: {
+      id: {
+        in: Array.from(new Set([input.homeWardId, ...input.allowedWardIds])),
+      },
+    },
+    select: {
+      id: true,
+      code: true,
+    },
+    orderBy: {
+      code: "asc",
+    },
+  });
+  const homeWard = wards.find((ward) => ward.id === input.homeWardId);
+  const allowedWardsText = wards.map((ward) => ward.code).join(", ");
+  const existingSnapshot = await tx.wardStaffSnapshot.findFirst({
+    where: {
+      wardCycleId: preparation.id,
+      staffId: input.staffId,
+    },
+    select: {
+      id: true,
+    },
+  });
+  const snapshotData = {
+    staffId: input.staffId,
+    staffCode: input.staffCode,
+    fullName: input.fullName,
+    homeWardName: homeWard?.code ?? "",
+    allowedWardsText: allowedWardsText || homeWard?.code || "",
+    position: input.position,
+    payPosition: input.payPosition,
+    otRate: input.otRate,
+    shiftPayRate: input.shiftPayRate,
+    isHead: input.isHead,
+    isTrainee: input.isTrainee,
+  };
+
+  if (existingSnapshot) {
+    await tx.wardStaffSnapshot.update({
+      where: {
+        id: existingSnapshot.id,
+      },
+      data: snapshotData,
+    });
+    return;
+  }
+
+  await tx.wardStaffSnapshot.create({
+    data: {
+      wardCycleId: preparation.id,
+      ...snapshotData,
+    },
+  });
 }
 
 async function getManagedUserRow(userId: string): Promise<UserManagementRow> {

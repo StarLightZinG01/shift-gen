@@ -9,4 +9,5 @@ export const mockCycle: CycleContext = {
   requestCloseDate: new Date("2026-08-20T00:00:00"),
   dataLockDate: new Date("2026-08-25T00:00:00"),
   autoGenerateAt: new Date("2026-08-26T00:00:00"),
+  holidays: [],
 };

@@ -15,6 +15,8 @@ export type NewStaffDraftInput = {
   off: string;
   vacation: string;
   leave: string;
+  academic: string;
+  preferredShifts: string;
 };
 
 export function createDraftStaffId() {
@@ -82,6 +84,8 @@ export function buildNewStaffRow(
     off: input.off.trim() || "0",
     vacation: input.vacation.trim() || "0",
     leave: input.leave.trim() || "0",
+    academic: input.academic.trim() || "0",
+    preferredShifts: input.preferredShifts.trim() || "0",
     isHead: input.isHead,
     isTrainee: input.isTrainee,
   };
@@ -104,6 +108,8 @@ export function buildExternalStaffRow(
     off: "0",
     vacation: "0",
     leave: "0",
+    academic: "0",
+    preferredShifts: "0",
     isHead: candidate.isHead,
     isTrainee: candidate.isTrainee,
   };

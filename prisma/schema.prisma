@@ -20,11 +20,11 @@ model User {
 
   roles                       UserRole[]
   staff                       Staff?
-  createdStaffWardPermissions StaffWardPermission[] @relation("StaffWardPermissionCreatedBy")
-  submittedWardPreparations   WardCyclePreparation[] @relation("WardPreparationSubmittedBy")
+  createdStaffWardPermissions StaffWardPermission[]    @relation("StaffWardPermissionCreatedBy")
+  submittedWardPreparations   WardCyclePreparation[]   @relation("WardPreparationSubmittedBy")
   selectedExternalStaff       WardCycleExternalStaff[] @relation("ExternalStaffSelectedBy")
-  createdScheduleVersions     ScheduleVersion[] @relation("ScheduleVersionCreatedBy")
-  manualChanges               ScheduleManualChange[] @relation("ManualChangeChangedBy")
+  createdScheduleVersions     ScheduleVersion[]        @relation("ScheduleVersionCreatedBy")
+  manualChanges               ScheduleManualChange[]   @relation("ManualChangeChangedBy")
   auditLogs                   AuditLog[]
 
   @@map("users")
@@ -74,28 +74,28 @@ model Ward {
 }
 
 model Staff {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String?  @unique @map("user_id") @db.Uuid
-  staffCode        String   @unique @map("staff_code")
-  fullName         String   @map("full_name")
-  homeWardId       String   @map("home_ward_id") @db.Uuid
-  position         String?
-  payPosition      String?  @map("pay_position")
-  otRate           Decimal  @default(0) @map("ot_rate") @db.Decimal(12, 2)
-  shiftPayRate     Decimal  @default(0) @map("shift_pay_rate") @db.Decimal(12, 2)
-  isHead           Boolean  @default(false) @map("is_head")
-  isTrainee        Boolean  @default(false) @map("is_trainee")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String?  @unique @map("user_id") @db.Uuid
+  staffCode    String   @unique @map("staff_code")
+  fullName     String   @map("full_name")
+  homeWardId   String   @map("home_ward_id") @db.Uuid
+  position     String?
+  payPosition  String?  @map("pay_position")
+  otRate       Decimal  @default(0) @map("ot_rate") @db.Decimal(12, 2)
+  shiftPayRate Decimal  @default(0) @map("shift_pay_rate") @db.Decimal(12, 2)
+  isHead       Boolean  @default(false) @map("is_head")
+  isTrainee    Boolean  @default(false) @map("is_trainee")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  user                  User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  homeWard              Ward                     @relation(fields: [homeWardId], references: [id])
-  wardPermissions       StaffWardPermission[]
-  snapshots             WardStaffSnapshot[]
-  externalSelections    WardCycleExternalStaff[]
-  availabilityRequests  AvailabilityRequest[]
-  assignments           ScheduleAssignment[]
-  violations            GaViolation[]
+  user                 User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  homeWard             Ward                     @relation(fields: [homeWardId], references: [id])
+  wardPermissions      StaffWardPermission[]
+  snapshots            WardStaffSnapshot[]
+  externalSelections   WardCycleExternalStaff[]
+  availabilityRequests AvailabilityRequest[]
+  assignments          ScheduleAssignment[]
+  violations           GaViolation[]
 
   @@index([homeWardId])
   @@map("staff")
@@ -117,26 +117,41 @@ model StaffWardPermission {
 }
 
 model ScheduleCycle {
-  id                String    @id @default(uuid()) @db.Uuid
-  year              Int
-  month             Int
-  status            String    @default("preparing")
-  requestOpenDate   DateTime? @map("request_open_date") @db.Date
-  requestCloseDate  DateTime? @map("request_close_date") @db.Date
-  dataLockDate      DateTime? @map("data_lock_date") @db.Date
-  autoGenerateAt    DateTime? @map("auto_generate_at")
-  publishedAt       DateTime? @map("published_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  id               String    @id @default(uuid()) @db.Uuid
+  year             Int
+  month            Int
+  status           String    @default("preparing")
+  requestOpenDate  DateTime? @map("request_open_date") @db.Date
+  requestCloseDate DateTime? @map("request_close_date") @db.Date
+  dataLockDate     DateTime? @map("data_lock_date") @db.Date
+  autoGenerateAt   DateTime? @map("auto_generate_at")
+  publishedAt      DateTime? @map("published_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   preparations         WardCyclePreparation[]
   externalStaff        WardCycleExternalStaff[]
   availabilityRequests AvailabilityRequest[]
+  holidays             ScheduleCycleHoliday[]
   gaRuns               GaRun[]
   scheduleVersions     ScheduleVersion[]
 
   @@unique([year, month])
   @@map("schedule_cycles")
+}
+
+model ScheduleCycleHoliday {
+  id          String   @id @default(uuid()) @db.Uuid
+  cycleId     String   @map("cycle_id") @db.Uuid
+  holidayDate DateTime @map("holiday_date") @db.Date
+  label       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  cycle ScheduleCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, holidayDate])
+  @@index([cycleId])
+  @@map("schedule_cycle_holidays")
 }
 
 model WardCyclePreparation {
@@ -148,11 +163,11 @@ model WardCyclePreparation {
   submittedAt DateTime? @map("submitted_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  cycle               ScheduleCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  ward                Ward                 @relation(fields: [wardId], references: [id], onDelete: Cascade)
-  submitter           User?                @relation("WardPreparationSubmittedBy", fields: [submittedBy], references: [id], onDelete: SetNull)
+  cycle                ScheduleCycle         @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  ward                 Ward                  @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  submitter            User?                 @relation("WardPreparationSubmittedBy", fields: [submittedBy], references: [id], onDelete: SetNull)
   staffingRequirements StaffingRequirement[]
-  staffSnapshots      WardStaffSnapshot[]
+  staffSnapshots       WardStaffSnapshot[]
 
   @@unique([cycleId, wardId])
   @@map("ward_cycle_preparations")
@@ -214,15 +229,16 @@ model WardStaffSnapshot {
 }
 
 model AvailabilityRequest {
-  id          String   @id @default(uuid()) @db.Uuid
-  cycleId     String   @map("cycle_id") @db.Uuid
-  staffId     String   @map("staff_id") @db.Uuid
-  requestDate DateTime @map("request_date") @db.Date
-  requestType String   @map("request_type")
-  reason      String?
-  status      String   @default("submitted")
-  submittedAt DateTime @default(now()) @map("submitted_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  cycleId        String   @map("cycle_id") @db.Uuid
+  staffId        String   @map("staff_id") @db.Uuid
+  requestDate    DateTime @map("request_date") @db.Date
+  requestType    String   @map("request_type")
+  preferredShift String?  @map("preferred_shift")
+  reason         String?
+  status         String   @default("submitted")
+  submittedAt    DateTime @default(now()) @map("submitted_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   cycle ScheduleCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   staff Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
@@ -244,12 +260,49 @@ model GaRun {
   finishedAt       DateTime? @map("finished_at")
   createdAt        DateTime  @default(now()) @map("created_at")
 
-  cycle            ScheduleCycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycle            ScheduleCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   scheduleVersions ScheduleVersion[]
   violations       GaViolation[]
 
   @@index([cycleId, status])
   @@map("ga_runs")
+}
+
+model GaSetting {
+  id                         String   @id @default(uuid()) @db.Uuid
+  profileKey                 String   @unique @map("profile_key")
+  profileName                String   @map("profile_name")
+  isActive                   Boolean  @default(false) @map("is_active")
+  populationSize             Int      @map("population_size")
+  generations                Int
+  patience                   Int
+  eliteSize                  Int      @map("elite_size")
+  tournamentSize             Int      @map("tournament_size")
+  crossoverRate              Decimal  @map("crossover_rate") @db.Decimal(8, 4)
+  mutationRate               Decimal  @map("mutation_rate") @db.Decimal(8, 6)
+  fullRepairEvery            Int      @default(4) @map("full_repair_every")
+  repairEliteEvery           Int      @default(8) @map("repair_elite_every")
+  randomSeed                 Int?     @map("random_seed")
+  maxSeconds                 Int      @map("max_seconds")
+  maxShiftsPer7Days          Int      @map("max_shifts_per_7_days")
+  weeklyMinDaysOff           Int      @map("weekly_min_days_off")
+  maxConsecutiveNights       Int      @map("max_consecutive_nights")
+  maxConsecutiveWorkDays     Int      @map("max_consecutive_work_days")
+  maxTraineePerShift         Int      @map("max_trainee_per_shift")
+  minRestHours               Int      @map("min_rest_hours")
+  workloadBalanceMaxDiff     Int      @map("workload_balance_max_diff")
+  shiftCountBalanceMaxDiff   Int      @map("shift_count_balance_max_diff")
+  shiftTypeBalanceMaxDiff    Int      @map("shift_type_balance_max_diff")
+  targetOffDaysPerStaff      Int?     @map("target_off_days_per_staff")
+  enableMorningEveningDouble Boolean  @default(false) @map("enable_morning_evening_double")
+  enableNightEveningDouble   Boolean  @default(false) @map("enable_night_evening_double")
+  preferMorningOt            Boolean  @default(true) @map("prefer_morning_ot")
+  morningRegularRequired     Boolean  @default(true) @map("morning_regular_required")
+  updatedBy                  String?  @map("updated_by") @db.Uuid
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  @@map("ga_settings")
 }
 
 model ScheduleVersion {
@@ -292,9 +345,9 @@ model ScheduleAssignment {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  scheduleVersion ScheduleVersion       @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
-  staff           Staff                 @relation(fields: [staffId], references: [id])
-  ward            Ward                  @relation(fields: [wardId], references: [id])
+  scheduleVersion ScheduleVersion        @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
+  staff           Staff                  @relation(fields: [staffId], references: [id])
+  ward            Ward                   @relation(fields: [wardId], references: [id])
   manualChanges   ScheduleManualChange[]
 
   @@unique([scheduleVersionId, staffId, workDate])
@@ -336,8 +389,8 @@ model WardCompensationSummary {
   totalAmount             Decimal  @default(0) @map("total_amount") @db.Decimal(14, 2)
   calculatedAt            DateTime @default(now()) @map("calculated_at")
 
-  scheduleVersion ScheduleVersion          @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
-  ward            Ward                     @relation(fields: [wardId], references: [id])
+  scheduleVersion ScheduleVersion           @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
+  ward            Ward                      @relation(fields: [wardId], references: [id])
   items           CompensationSummaryItem[]
 
   @@unique([scheduleVersionId, wardId])
@@ -360,16 +413,16 @@ model CompensationSummaryItem {
 }
 
 model GaViolation {
-  id             String   @id @default(uuid()) @db.Uuid
-  gaRunId        String   @map("ga_run_id") @db.Uuid
-  staffId        String?  @map("staff_id") @db.Uuid
-  wardId         String?  @map("ward_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  gaRunId        String    @map("ga_run_id") @db.Uuid
+  staffId        String?   @map("staff_id") @db.Uuid
+  wardId         String?   @map("ward_id") @db.Uuid
   violationDate  DateTime? @map("violation_date") @db.Date
-  constraintCode String   @map("constraint_code")
+  constraintCode String    @map("constraint_code")
   severity       String
   message        String
-  penalty        Decimal  @default(0) @db.Decimal(14, 2)
-  createdAt      DateTime @default(now()) @map("created_at")
+  penalty        Decimal   @default(0) @db.Decimal(14, 2)
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   gaRun GaRun  @relation(fields: [gaRunId], references: [id], onDelete: Cascade)
   staff Staff? @relation(fields: [staffId], references: [id], onDelete: SetNull)

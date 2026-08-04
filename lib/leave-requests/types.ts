@@ -4,11 +4,13 @@ export type SelectableWard = {
   name: string;
 };
 
-export type LeaveRequestType = "Off" | "V" | "ว" | "ล";
+export type LeaveRequestType = "Off" | "V" | "ว" | "ล" | "PreferredShift";
+export type PreferredShiftCode = "ช" | "บ" | "ด" | "ช/บ" | "ด/บ";
 
 export type LeaveRequestDraft = {
   date: number;
   type: LeaveRequestType;
+  preferredShift?: PreferredShiftCode | "";
   reason: string;
 };
 

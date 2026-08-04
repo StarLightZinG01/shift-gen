@@ -12,8 +12,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { saveScheduleManagementAction } from "@/app/actions/schedule-management";
 import { ReadinessCheckCard } from "@/components/features/schedule-management/ReadinessCheckCard";
+import { ScheduleManagementForm } from "@/components/features/schedule-management/ScheduleManagementForm";
 import { StaffTable as StaffDraftTable } from "@/components/features/schedule-management/StaffTable";
 import { WardSummaryCard } from "@/components/features/schedule-management/WardSummaryCard";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import {
   formatCycleStatus,
   formatDateRange,
   formatDateTime,
+  formatHolidayList,
   formatMonthYear,
   formatRequestDate,
   formatWardLabel,
@@ -136,13 +137,17 @@ export function ScheduleManagementView({
         </section>
       ) : null}
 
-      <form action={saveScheduleManagementAction} className="space-y-6">
+      <ScheduleManagementForm>
         <input name="cycleId" type="hidden" value={cycle.id ?? ""} />
         <input name="wardId" type="hidden" value={ward?.id ?? ""} />
         <input name="mode" type="hidden" value={mode} />
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <ScheduleCycleCard ward={ward} monthYearLabel={monthYearLabel} />
+          <ScheduleCycleCard
+            cycle={cycle}
+            ward={ward}
+            monthYearLabel={monthYearLabel}
+          />
           <StaffingRequirementsCard
             staffingRequirements={staffingRequirements}
           />
@@ -177,17 +182,18 @@ export function ScheduleManagementView({
           <HugeiconsIcon icon={SaveIcon} size={22} strokeWidth={2} />
           บันทึกข้อมูล
         </Button>
-      </form>
+      </ScheduleManagementForm>
     </div>
   );
 }
 
 type ScheduleCycleCardProps = {
+  cycle: CycleContext;
   ward: WardContext | null;
   monthYearLabel: string;
 };
 
-function ScheduleCycleCard({ ward, monthYearLabel }: ScheduleCycleCardProps) {
+function ScheduleCycleCard({ cycle, ward, monthYearLabel }: ScheduleCycleCardProps) {
   return (
     <section className="rounded-2xl border bg-white p-6 shadow-sm">
       <span className="font-medium">1. ข้อมูลรอบจัดตาราง</span>
@@ -215,7 +221,11 @@ function ScheduleCycleCard({ ward, monthYearLabel }: ScheduleCycleCardProps) {
         <IconBox icon={CancelCircleHalfDotIcon} />
         <div className="w-full space-y-1.5">
           <Label className="text-muted-foreground">วันหยุดนักขัตฤกษ์</Label>
-          <Input value="12 ส.ค., 13 ส.ค. (mock)" readOnly className="bg-white" />
+          <Input
+            value={formatHolidayList(cycle.holidays)}
+            readOnly
+            className="bg-white text-muted-foreground"
+          />
         </div>
       </div>
     </section>
@@ -484,7 +494,10 @@ function RequestSummaryTable({
                   </TableCell>
                   <TableCell>{request.displayName}</TableCell>
                   <TableCell>
-                    <RequestTypeBadge type={request.requestType} />
+                    <RequestTypeBadge
+                      type={request.requestType}
+                      preferredShift={request.preferredShift}
+                    />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatRequestDate(request.requestDate)}
@@ -599,7 +612,13 @@ function RoleBadge({ active, icon, label }: RoleBadgeProps) {
   );
 }
 
-function RequestTypeBadge({ type }: { type: string }) {
+function RequestTypeBadge({
+  type,
+  preferredShift,
+}: {
+  type: string;
+  preferredShift?: string | null;
+}) {
   const normalizedType = type.toLowerCase();
   const tone =
     normalizedType === "off"
@@ -608,13 +627,19 @@ function RequestTypeBadge({ type }: { type: string }) {
         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
         : type === "ว"
           ? "border-amber-200 bg-amber-50 text-amber-700"
-          : "border-rose-200 bg-rose-50 text-rose-700";
+          : type === "PreferredShift"
+            ? "border-brand/25 bg-brand/10 text-brand"
+            : "border-rose-200 bg-rose-50 text-rose-700";
+  const label =
+    type === "PreferredShift"
+      ? `อยากเข้าเวร${preferredShift ? ` ${preferredShift}` : ""}`
+      : type;
 
   return (
     <span
       className={`inline-flex min-w-14 justify-center rounded-md border px-2.5 py-1 text-xs font-semibold ${tone}`}
     >
-      {type}
+      {label}
     </span>
   );
 }

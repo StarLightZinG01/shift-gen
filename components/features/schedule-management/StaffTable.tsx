@@ -106,9 +106,11 @@ export function StaffTable({
             <TableHead className="min-w-28">ค่า OT</TableHead>
             <TableHead className="min-w-28">ค่าเวร (บ)</TableHead>
             <TableHead className="min-w-28">บทบาท</TableHead>
-            <TableHead className="min-w-24">O (off)</TableHead>
-            <TableHead className="min-w-24">V</TableHead>
+            <TableHead className="min-w-32">O (off)</TableHead>
+            <TableHead className="min-w-32">V</TableHead>
             <TableHead className="min-w-24">ล</TableHead>
+            <TableHead className="min-w-32">ว</TableHead>
+            <TableHead className="min-w-44">วันที่อยากเข้าเวร</TableHead>
             <TableHead className="w-14 text-right" />
           </TableRow>
         </TableHeader>
@@ -129,7 +131,7 @@ export function StaffTable({
           ) : (
             <TableRow>
               <TableCell
-                colSpan={13}
+                colSpan={15}
                 className="h-28 text-center text-muted-foreground"
               >
                 {ward
@@ -176,6 +178,7 @@ function StaffTableRow({
         <input name="staffRowKey" type="hidden" value={row.id} />
         <input name={`staff.${row.id}.rowType`} type="hidden" value={row.rowType} />
         <input name={`staff.${row.id}.staffId`} type="hidden" value={row.staffId ?? ""} />
+        <input name={`staff.${row.id}.homeWard`} type="hidden" value={row.homeWard} />
         <input name={`staff.${row.id}.isHead`} type="hidden" value={String(row.isHead)} />
         <input
           name={`staff.${row.id}.isTrainee`}
@@ -194,20 +197,13 @@ function StaffTableRow({
         />
       </TableCell>
       <TableCell>
-        <div className="space-y-1">
-          <Input
-            name={`staff.${row.id}.fullName`}
-            defaultValue={row.fullName}
-            className="h-8 rounded-md"
-            readOnly={isExternal}
-            required
-          />
-          {isExternal ? (
-            <span className="inline-flex w-fit rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-              บุคลากรช่วยวอร์ดนี้
-            </span>
-          ) : null}
-        </div>
+        <Input
+          name={`staff.${row.id}.fullName`}
+          defaultValue={row.fullName}
+          className="h-8 rounded-md"
+          readOnly={isExternal}
+          required
+        />
       </TableCell>
       <TableCell>
         <Select defaultValue={row.homeWard} disabled>
@@ -283,6 +279,7 @@ function StaffTableRow({
           name={`staff.${row.id}.off`}
           defaultValue={row.off}
           className="h-8 rounded-md"
+          placeholder="1, 5, 20"
         />
       </TableCell>
       <TableCell>
@@ -290,6 +287,7 @@ function StaffTableRow({
           name={`staff.${row.id}.vacation`}
           defaultValue={row.vacation}
           className="h-8 rounded-md"
+          placeholder="1, 5, 20"
         />
       </TableCell>
       <TableCell>
@@ -297,6 +295,23 @@ function StaffTableRow({
           name={`staff.${row.id}.leave`}
           defaultValue={row.leave}
           className="h-8 rounded-md"
+          placeholder="1, 5, 20"
+        />
+      </TableCell>
+      <TableCell>
+        <Input
+          name={`staff.${row.id}.academic`}
+          defaultValue={row.academic}
+          className="h-8 rounded-md"
+          placeholder="1, 5, 20"
+        />
+      </TableCell>
+      <TableCell>
+        <Input
+          name={`staff.${row.id}.preferredShifts`}
+          defaultValue={row.preferredShifts}
+          className="h-8 rounded-md"
+          placeholder="20:ช, 21:ด"
         />
       </TableCell>
       <TableCell className="text-right">

@@ -1,4 +1,4 @@
-import type { LeaveRequestType } from "./types";
+import type { LeaveRequestType, PreferredShiftCode } from "./types";
 
 export const leaveRequestTypes: Array<{
   value: LeaveRequestType;
@@ -7,8 +7,20 @@ export const leaveRequestTypes: Array<{
 }> = [
   { value: "Off", label: "Off", description: "ขอวันหยุด" },
   { value: "V", label: "V", description: "ขอพักร้อน" },
-  { value: "ว", label: "ว", description: "ขอเวร" },
+  { value: "ว", label: "ว", description: "ประชุมวิชาการ" },
   { value: "ล", label: "ล", description: "ขอลา" },
+  { value: "PreferredShift", label: "อยากเข้าเวร", description: "ระบุกะที่อยากเข้า" },
+];
+
+export const preferredShiftOptions: Array<{
+  value: PreferredShiftCode;
+  label: string;
+}> = [
+  { value: "ช", label: "เช้า (ช)" },
+  { value: "บ", label: "บ่าย (บ)" },
+  { value: "ด", label: "ดึก (ด)" },
+  { value: "ช/บ", label: "เช้า/บ่าย (ช/บ)" },
+  { value: "ด/บ", label: "ดึก/บ่าย (ด/บ)" },
 ];
 
 export const leaveRequestMonthLabel = "สิงหาคม 2569";

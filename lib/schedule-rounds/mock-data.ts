@@ -17,6 +17,18 @@ export const adminTabs: AdminTab[] = [
     id: "schedule-rounds",
     label: "รอบการจัดตาราง",
   },
+  {
+    id: "compensation",
+    label: "ค่าตอบแทน",
+  },
+  {
+    id: "manual-schedule",
+    label: "แก้ไขตารางเวร",
+  },
+  {
+    id: "ga-settings",
+    label: "ตั้งค่า GA",
+  },
 ];
 
 export const overviewStats: OverviewStat[] = [

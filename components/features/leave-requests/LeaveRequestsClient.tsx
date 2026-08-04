@@ -22,6 +22,7 @@ import {
 import {
   leaveRequestTypes,
   leaveRequestWeekDays,
+  preferredShiftOptions,
 } from "@/lib/leave-requests/constants";
 import { formatSelectableWardLabel } from "@/lib/leave-requests/formatters";
 import type {
@@ -63,7 +64,12 @@ export function LeaveRequestsClient({
 
       return [
         ...current,
-        { date, type: "Off" as LeaveRequestType, reason: "" },
+        {
+          date,
+          type: "Off" as LeaveRequestType,
+          preferredShift: "" as LeaveRequestDraft["preferredShift"],
+          reason: "",
+        },
       ].sort((a, b) => a.date - b.date);
     });
   }
@@ -168,7 +174,13 @@ export function LeaveRequestsClient({
                     <SelectTrigger className="h-11 w-full rounded-md border-brand bg-brand px-4 font-semibold text-white shadow-[0_12px_24px_rgba(0,133,133,0.22)] hover:bg-[#006f6f] [&_svg]:text-white">
                       <SelectValue placeholder="เลือกวอร์ด" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent
+                      position="popper"
+                      side="bottom"
+                      align="start"
+                      sideOffset={6}
+                      avoidCollisions={false}
+                    >
                       {data.allowedWards.map((ward) => (
                         <SelectItem key={ward.id} value={ward.id}>
                           {formatSelectableWardLabel(ward)}
@@ -364,13 +376,23 @@ function RequestCard({
         <Select
           value={request.type}
           onValueChange={(value) =>
-            onChange(request.date, { type: value as LeaveRequestType })
+            onChange(request.date, {
+              type: value as LeaveRequestType,
+              preferredShift:
+                value === "PreferredShift" ? request.preferredShift || "ช" : "",
+            })
           }
         >
           <SelectTrigger className="h-9 w-full rounded-md border-brand bg-brand text-white hover:bg-[#006f6f] [&_svg]:text-white">
             <SelectValue placeholder="เลือกประเภทคำขอ" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            position="popper"
+            side="bottom"
+            align="start"
+            sideOffset={6}
+            avoidCollisions={false}
+          >
             {leaveRequestTypes.map((type) => (
               <SelectItem key={type.value} value={type.value}>
                 {type.label} - {type.description}
@@ -379,6 +401,36 @@ function RequestCard({
           </SelectContent>
         </Select>
       </div>
+
+      {request.type === "PreferredShift" ? (
+        <div className="mt-3">
+          <Select
+            value={request.preferredShift || "ช"}
+            onValueChange={(value) =>
+              onChange(request.date, {
+                preferredShift: value as LeaveRequestDraft["preferredShift"],
+              })
+            }
+          >
+            <SelectTrigger className="h-9 w-full rounded-md bg-white">
+              <SelectValue placeholder="เลือกกะที่อยากเข้าเวร" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              side="bottom"
+              align="start"
+              sideOffset={6}
+              avoidCollisions={false}
+            >
+              {preferredShiftOptions.map((shift) => (
+                <SelectItem key={shift.value} value={shift.value}>
+                  {shift.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       <textarea
         value={request.reason}

@@ -67,6 +67,13 @@ export function canAccessPath(roles: string[], pathname: string) {
     return canRoleAccessItem(roles, adminRoles);
   }
 
+  if (
+    pathname === "/home/manual-schedule" ||
+    pathname.startsWith("/home/manual-schedule/")
+  ) {
+    return canRoleAccessItem(roles, managerRoles);
+  }
+
   const matchedItem = appNavigationItems
     .filter((item) => isActivePath(pathname, item.url))
     .sort((a, b) => b.url.length - a.url.length)[0];

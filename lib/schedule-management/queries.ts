@@ -82,6 +82,8 @@ export async function getCurrentCycle(): Promise<CycleContext> {
     return mockCycle;
   }
 
+  const holidays = await getCycleHolidays(cycle.id);
+
   return {
     id: cycle.id,
     month: cycle.month,
@@ -91,6 +93,7 @@ export async function getCurrentCycle(): Promise<CycleContext> {
     requestCloseDate: cycle.requestCloseDate,
     dataLockDate: cycle.dataLockDate,
     autoGenerateAt: cycle.autoGenerateAt,
+    holidays,
   };
 }
 
@@ -126,6 +129,8 @@ export async function getCurrentCycleOrNull(): Promise<CycleContext | null> {
     return null;
   }
 
+  const holidays = await getCycleHolidays(cycle.id);
+
   return {
     id: cycle.id,
     month: cycle.month,
@@ -135,6 +140,7 @@ export async function getCurrentCycleOrNull(): Promise<CycleContext | null> {
     requestCloseDate: cycle.requestCloseDate,
     dataLockDate: cycle.dataLockDate,
     autoGenerateAt: cycle.autoGenerateAt,
+    holidays,
   };
 }
 
@@ -142,7 +148,24 @@ export async function getStaffRowsForWard(
   wardId: string,
   cycleId: string | null,
 ): Promise<StaffRow[]> {
-  const [homeStaff, externalSelections] = await Promise.all([
+  const [preparation, homeStaff, externalSelections] = await Promise.all([
+    cycleId
+      ? prisma.wardCyclePreparation.findUnique({
+          where: {
+            cycleId_wardId: {
+              cycleId,
+              wardId,
+            },
+          },
+          include: {
+            staffSnapshots: {
+              orderBy: {
+                staffCode: "asc",
+              },
+            },
+          },
+        })
+      : Promise.resolve(null),
     prisma.staff.findMany({
       where: {
         homeWardId: wardId,
@@ -189,12 +212,22 @@ export async function getStaffRowsForWard(
       : Promise.resolve([]),
   ]);
 
-  return [
-    ...homeStaff.map((member) => mapStaffToRow(member, "home")),
+  const homeStaffById = new Map(homeStaff.map((member) => [member.id, member]));
+  const baseStaffRows =
+    preparation !== null && preparation.staffSnapshots.length > 0
+      ? preparation.staffSnapshots.map((snapshot) =>
+          mapSnapshotToRow(snapshot, homeStaffById),
+        )
+      : homeStaff.map((member) => mapStaffToRow(member, "home"));
+
+  const staffRows = [
+    ...baseStaffRows,
     ...externalSelections.map((selection) =>
       mapStaffToRow(selection.staff, "external"),
     ),
   ];
+
+  return applyAvailabilityRequestsToStaffRows(staffRows, cycleId);
 }
 
 export async function getExternalStaffCandidates(
@@ -265,8 +298,56 @@ function mapStaffToRow(
     off: "0",
     vacation: "0",
     leave: "0",
+    academic: "0",
+    preferredShifts: "0",
     isHead: member.isHead,
     isTrainee: member.isTrainee,
+  };
+}
+
+function mapSnapshotToRow(
+  snapshot: {
+    id: string;
+    staffId: string | null;
+    staffCode: string;
+    fullName: string;
+    homeWardName: string;
+    allowedWardsText: string;
+    payPosition: string | null;
+    position: string | null;
+    otRate: unknown;
+    shiftPayRate: unknown;
+    isHead: boolean;
+    isTrainee: boolean;
+  },
+  staffById: Map<string, NonNullable<StaffWithWardPermissions>>,
+): StaffRow {
+  if (snapshot.staffId) {
+    const member = staffById.get(snapshot.staffId);
+
+    if (member) {
+      return mapStaffToRow(member, "home");
+    }
+  }
+
+  return {
+    id: snapshot.staffId ?? `snapshot-${snapshot.id}`,
+    staffId: snapshot.staffId,
+    rowType: "home",
+    code: snapshot.staffCode,
+    fullName: snapshot.fullName,
+    homeWard: snapshot.homeWardName,
+    allowedWards: splitAllowedWardText(snapshot.allowedWardsText),
+    payPosition: snapshot.payPosition ?? snapshot.position ?? "",
+    otRate: String(snapshot.otRate ?? 0),
+    shiftPayRate: String(snapshot.shiftPayRate ?? 0),
+    off: "0",
+    vacation: "0",
+    leave: "0",
+    academic: "0",
+    preferredShifts: "0",
+    isHead: snapshot.isHead,
+    isTrainee: snapshot.isTrainee,
   };
 }
 
@@ -281,6 +362,13 @@ function getAllowedWardCodes(member: NonNullable<StaffWithWardPermissions>) {
   return Array.from(allowedWards);
 }
 
+function splitAllowedWardText(value: string) {
+  return value
+    .split(/[,\n\r;|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export async function getRequestSummaryRows(
   cycleId: string | null,
   wardId: string,
@@ -289,11 +377,17 @@ export async function getRequestSummaryRows(
     return [];
   }
 
+  const staffIds = await getCycleWardStaffIds(cycleId, wardId);
+
+  if (staffIds.length === 0) {
+    return [];
+  }
+
   const requests = await prisma.availabilityRequest.findMany({
     where: {
       cycleId,
-      staff: {
-        homeWardId: wardId,
+      staffId: {
+        in: staffIds,
       },
     },
     include: {
@@ -319,6 +413,7 @@ export async function getRequestSummaryRows(
     staffCode: request.staff.staffCode,
     displayName: request.staff.fullName,
     requestType: request.requestType,
+    preferredShift: request.preferredShift,
     requestDate: request.requestDate,
     reason: request.reason ?? "",
   }));
@@ -372,4 +467,167 @@ export async function getStaffingRequirements(
   }
 
   return requirements;
+}
+
+async function applyAvailabilityRequestsToStaffRows(
+  staffRows: StaffRow[],
+  cycleId: string | null,
+): Promise<StaffRow[]> {
+  if (!cycleId || staffRows.length === 0) {
+    return staffRows;
+  }
+
+  const staffIds = staffRows
+    .map((row) => row.staffId)
+    .filter((staffId): staffId is string => Boolean(staffId));
+
+  if (staffIds.length === 0) {
+    return staffRows;
+  }
+
+  const requests = await prisma.availabilityRequest.findMany({
+    where: {
+      cycleId,
+      staffId: {
+        in: staffIds,
+      },
+    },
+    orderBy: {
+      requestDate: "asc",
+    },
+  });
+
+  const datesByStaff = new Map<
+    string,
+    {
+      off: number[];
+      vacation: number[];
+      leave: number[];
+      academic: number[];
+      preferredShifts: string[];
+    }
+  >();
+
+  for (const request of requests) {
+    const current =
+      datesByStaff.get(request.staffId) ?? {
+        off: [],
+        vacation: [],
+        leave: [],
+        academic: [],
+        preferredShifts: [],
+      };
+    const day = request.requestDate.getUTCDate();
+
+    if (request.requestType === "Off") {
+      current.off.push(day);
+    }
+
+    if (request.requestType === "V") {
+      current.vacation.push(day);
+    }
+
+    if (request.requestType === "ล") {
+      current.leave.push(day);
+    }
+
+    if (request.requestType === "ว") {
+      current.academic.push(day);
+    }
+
+    if (request.requestType === "PreferredShift" && request.preferredShift) {
+      current.preferredShifts.push(`${day}:${request.preferredShift}`);
+    }
+
+    datesByStaff.set(request.staffId, current);
+  }
+
+  return staffRows.map((row) => {
+    if (!row.staffId) {
+      return row;
+    }
+
+    const dates = datesByStaff.get(row.staffId);
+
+    if (!dates) {
+      return row;
+    }
+
+    return {
+      ...row,
+      off: formatRequestDays(dates.off),
+      vacation: formatRequestDays(dates.vacation),
+      leave: formatRequestDays(dates.leave),
+      academic: formatRequestDays(dates.academic),
+      preferredShifts: formatPreferredShiftRequests(dates.preferredShifts),
+    };
+  });
+}
+
+async function getCycleWardStaffIds(cycleId: string, wardId: string) {
+  const [homeStaff, externalSelections] = await Promise.all([
+    prisma.staff.findMany({
+      where: {
+        homeWardId: wardId,
+      },
+      select: {
+        id: true,
+      },
+    }),
+    prisma.wardCycleExternalStaff.findMany({
+      where: {
+        cycleId,
+        wardId,
+      },
+      select: {
+        staffId: true,
+      },
+    }),
+  ]);
+
+  return Array.from(
+    new Set([
+      ...homeStaff.map((staff) => staff.id),
+      ...externalSelections.map((selection) => selection.staffId),
+    ]),
+  );
+}
+
+function formatRequestDays(days: number[]) {
+  if (days.length === 0) {
+    return "0";
+  }
+
+  return Array.from(new Set(days))
+    .sort((a, b) => a - b)
+    .join(", ");
+}
+
+function formatPreferredShiftRequests(values: string[]) {
+  if (values.length === 0) {
+    return "0";
+  }
+
+  return Array.from(new Set(values))
+    .sort((a, b) => Number(a.split(":")[0]) - Number(b.split(":")[0]))
+    .join(", ");
+}
+
+type CycleHolidayRow = {
+  holiday_date: Date;
+  label: string | null;
+};
+
+async function getCycleHolidays(cycleId: string) {
+  const holidays = await prisma.$queryRaw<CycleHolidayRow[]>`
+    SELECT holiday_date, label
+    FROM schedule_cycle_holidays
+    WHERE cycle_id = ${cycleId}::uuid
+    ORDER BY holiday_date ASC
+  `;
+
+  return holidays.map((holiday) => ({
+    date: holiday.holiday_date,
+    label: holiday.label,
+  }));
 }

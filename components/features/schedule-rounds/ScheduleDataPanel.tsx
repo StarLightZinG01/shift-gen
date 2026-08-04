@@ -1,19 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  Add01Icon,
   AlertCircleIcon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
+  Delete02Icon,
   Hospital02Icon,
   Search01Icon,
   TaskDaily01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { toast } from "sonner";
 
+import {
+  createWardAction,
+  deleteWardAction,
+} from "@/app/actions/schedule-rounds";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,6 +59,7 @@ import {
 } from "@/components/ui/table";
 import type {
   ScheduleDataOverview,
+  WardScheduleDataRow,
   WardPreparationStatus,
 } from "@/lib/schedule-rounds/types";
 
@@ -44,9 +71,19 @@ type ScheduleDataPanelProps = {
 };
 
 export function ScheduleDataPanel({ data }: ScheduleDataPanelProps) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
+  const [isPending, startTransition] = useTransition();
+  const [isCreateWardOpen, setIsCreateWardOpen] = useState(false);
+  const [wardToDelete, setWardToDelete] = useState<WardScheduleDataRow | null>(
+    null,
+  );
+  const [wardDraft, setWardDraft] = useState({
+    code: "",
+    name: "",
+  });
 
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -75,6 +112,52 @@ export function ScheduleDataPanel({ data }: ScheduleDataPanelProps) {
     setPage(1);
   }
 
+  function resetWardDraft() {
+    setWardDraft({
+      code: "",
+      name: "",
+    });
+  }
+
+  function handleCreateWard(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    startTransition(async () => {
+      const result = await createWardAction(wardDraft);
+
+      if (result.status === "error") {
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message);
+      resetWardDraft();
+      setIsCreateWardOpen(false);
+      resetPage();
+      router.refresh();
+    });
+  }
+
+  function handleDeleteWard() {
+    if (!wardToDelete) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await deleteWardAction(wardToDelete.wardId);
+
+      if (result.status === "error") {
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message);
+      setWardToDelete(null);
+      resetPage();
+      router.refresh();
+    });
+  }
+
   if (!data.cycle) {
     return (
       <section className="rounded-2xl border border-dashed bg-white p-8 text-center shadow-sm">
@@ -92,11 +175,21 @@ export function ScheduleDataPanel({ data }: ScheduleDataPanelProps) {
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-sm">
-        <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
           <h2 className="text-xl font-semibold">ข้อมูลการจัดตาราง</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             ตรวจสอบสถานะข้อมูลของทุกวอร์ดสำหรับรอบ {data.cycle.monthLabel}
           </p>
+          </div>
+          <Button
+            type="button"
+            className="self-start"
+            onClick={() => setIsCreateWardOpen(true)}
+          >
+            <HugeiconsIcon icon={Add01Icon} size={17} strokeWidth={2} />
+            เพิ่มวอร์ด
+          </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
@@ -191,6 +284,7 @@ export function ScheduleDataPanel({ data }: ScheduleDataPanelProps) {
                 <TableHead className="min-w-32 text-center">
                   รายละเอียด
                 </TableHead>
+                <TableHead className="min-w-28 text-center">จัดการ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,12 +320,24 @@ export function ScheduleDataPanel({ data }: ScheduleDataPanelProps) {
                         </Link>
                       </Button>
                     </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        onClick={() => setWardToDelete(row)}
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} size={16} strokeWidth={2} />
+                        ลบ
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={5}
                     className="h-28 text-center text-muted-foreground"
                   >
                     ไม่พบข้อมูลวอร์ดตามเงื่อนไขที่เลือก
@@ -273,6 +379,105 @@ export function ScheduleDataPanel({ data }: ScheduleDataPanelProps) {
           </div>
         </div>
       </section>
+
+      <Dialog
+        open={isCreateWardOpen}
+        onOpenChange={(open) => {
+          setIsCreateWardOpen(open);
+          if (!open) {
+            resetWardDraft();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <form onSubmit={handleCreateWard}>
+            <DialogHeader>
+              <DialogTitle>เพิ่มวอร์ด</DialogTitle>
+              <DialogDescription>
+                สร้างวอร์ดใหม่ลงฐานข้อมูลจริง วอร์ดนี้จะพร้อมใช้งานในรอบจัดตารางที่ยังเปิดใช้งานอยู่
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="ward-code">รหัสวอร์ด</Label>
+                <Input
+                  id="ward-code"
+                  value={wardDraft.code}
+                  onChange={(event) =>
+                    setWardDraft((draft) => ({
+                      ...draft,
+                      code: event.target.value,
+                    }))
+                  }
+                  placeholder="เช่น ICU, ER, Ped3"
+                  className="h-10 rounded-md bg-white"
+                  disabled={isPending}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ward-name">ชื่อวอร์ด</Label>
+                <Input
+                  id="ward-name"
+                  value={wardDraft.name}
+                  onChange={(event) =>
+                    setWardDraft((draft) => ({
+                      ...draft,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="เช่น หอผู้ป่วย ICU"
+                  className="h-10 rounded-md bg-white"
+                  disabled={isPending}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => setIsCreateWardOpen(false)}
+              >
+                ยกเลิก
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "กำลังบันทึก..." : "บันทึกวอร์ด"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(wardToDelete)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWardToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการลบวอร์ด</AlertDialogTitle>
+            <AlertDialogDescription>
+              ต้องการลบวอร์ด {wardToDelete?.wardCode} ออกจากระบบหรือไม่ ระบบจะไม่ลบถ้าวอร์ดนี้ยังมีบุคลากร ตารางเวร หรือสรุปค่าตอบแทนผูกอยู่
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isPending}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              onClick={handleDeleteWard}
+            >
+              {isPending ? "กำลังลบ..." : "ลบวอร์ด"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

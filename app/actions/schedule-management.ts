@@ -7,6 +7,11 @@ import { getCurrentSession } from "@/lib/auth/session";
 import { saveScheduleManagementData } from "@/lib/schedule-management/save";
 
 type StaffRowType = "home" | "new" | "external";
+export type ScheduleManagementActionState = {
+  ok: boolean | null;
+  message: string;
+  submittedAt: number;
+};
 
 const staffingRequirementSchema = z
   .object({
@@ -32,59 +37,76 @@ const staffingRequirementSchema = z
     path: ["nightMin"],
   });
 
-export async function saveScheduleManagementAction(formData: FormData) {
-  const session = await getCurrentSession();
+export async function saveScheduleManagementAction(
+  _prevState: ScheduleManagementActionState,
+  formData: FormData,
+): Promise<ScheduleManagementActionState> {
+  try {
+    const session = await getCurrentSession();
 
-  if (!session) {
-    throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูล");
-  }
+    if (!session) {
+      throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูล");
+    }
 
-  const parsed = staffingRequirementSchema.safeParse({
-    cycleId: formData.get("cycleId"),
-    wardId: formData.get("wardId"),
-    morningMin: formData.get("morningMin"),
-    morningMax: formData.get("morningMax"),
-    afternoonMin: formData.get("afternoonMin"),
-    afternoonMax: formData.get("afternoonMax"),
-    nightMin: formData.get("nightMin"),
-    nightMax: formData.get("nightMax"),
-  });
+    const parsed = staffingRequirementSchema.safeParse({
+      cycleId: formData.get("cycleId"),
+      wardId: formData.get("wardId"),
+      morningMin: formData.get("morningMin"),
+      morningMax: formData.get("morningMax"),
+      afternoonMin: formData.get("afternoonMin"),
+      afternoonMax: formData.get("afternoonMax"),
+      nightMin: formData.get("nightMin"),
+      nightMax: formData.get("nightMax"),
+    });
 
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "ข้อมูลกำลังคนไม่ถูกต้อง");
-  }
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "ข้อมูลกำลังคนไม่ถูกต้อง");
+    }
 
-  const isAdmin = session.roles.includes("admin");
+    const isAdmin = session.roles.includes("admin");
 
-  if (!isAdmin && session.homeWardId !== parsed.data.wardId) {
-    throw new Error("บัญชีนี้ไม่มีสิทธิ์บันทึกข้อมูลของวอร์ดนี้");
-  }
+    if (!isAdmin && session.homeWardId !== parsed.data.wardId) {
+      throw new Error("บัญชีนี้ไม่มีสิทธิ์บันทึกข้อมูลของวอร์ดนี้");
+    }
 
-  await saveScheduleManagementData({
-    cycleId: parsed.data.cycleId,
-    wardId: parsed.data.wardId,
-    userId: session.userId,
-    staffRows: parseStaffRows(formData),
-    staffingRequirements: {
-      morning: {
-        min: parsed.data.morningMin,
-        max: parsed.data.morningMax,
+    await saveScheduleManagementData({
+      cycleId: parsed.data.cycleId,
+      wardId: parsed.data.wardId,
+      userId: session.userId,
+      staffRows: parseStaffRows(formData),
+      staffingRequirements: {
+        morning: {
+          min: parsed.data.morningMin,
+          max: parsed.data.morningMax,
+        },
+        afternoon: {
+          min: parsed.data.afternoonMin,
+          max: parsed.data.afternoonMax,
+        },
+        night: {
+          min: parsed.data.nightMin,
+          max: parsed.data.nightMax,
+        },
       },
-      afternoon: {
-        min: parsed.data.afternoonMin,
-        max: parsed.data.afternoonMax,
-      },
-      night: {
-        min: parsed.data.nightMin,
-        max: parsed.data.nightMax,
-      },
-    },
-  });
+    });
 
-  revalidatePath("/home/schedule-management");
-  revalidatePath("/home/schedule-rounds");
-  revalidatePath("/schedule-rounds");
-  revalidatePath(`/home/schedule-rounds/wards/${parsed.data.wardId}`);
+    revalidatePath("/home/schedule-management");
+    revalidatePath("/home/schedule-rounds");
+    revalidatePath("/schedule-rounds");
+    revalidatePath(`/home/schedule-rounds/wards/${parsed.data.wardId}`);
+
+    return {
+      ok: true,
+      message: "บันทึกข้อมูลวอร์ดสำเร็จ",
+      submittedAt: Date.now(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "บันทึกข้อมูลไม่สำเร็จ",
+      submittedAt: Date.now(),
+    };
+  }
 }
 
 function parseStaffRows(formData: FormData) {
@@ -120,11 +142,18 @@ function parseStaffRows(formData: FormData) {
       staffId,
       code,
       fullName,
+      homeWard: getOptionalString(formData, `staff.${rowKey}.homeWard`) ?? "",
       payPosition,
       otRate,
       shiftPayRate,
       isHead: getBoolean(formData, `staff.${rowKey}.isHead`),
       isTrainee: getBoolean(formData, `staff.${rowKey}.isTrainee`),
+      off: getOptionalString(formData, `staff.${rowKey}.off`) ?? "0",
+      vacation: getOptionalString(formData, `staff.${rowKey}.vacation`) ?? "0",
+      leave: getOptionalString(formData, `staff.${rowKey}.leave`) ?? "0",
+      academic: getOptionalString(formData, `staff.${rowKey}.academic`) ?? "0",
+      preferredShifts:
+        getOptionalString(formData, `staff.${rowKey}.preferredShifts`) ?? "0",
     };
   });
 }
