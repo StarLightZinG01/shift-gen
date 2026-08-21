@@ -134,6 +134,7 @@ model ScheduleCycle {
   availabilityRequests AvailabilityRequest[]
   holidays             ScheduleCycleHoliday[]
   gaRuns               GaRun[]
+  gaRunBatches         GaRunBatch[]
   scheduleVersions     ScheduleVersion[]
 
   @@unique([year, month])
@@ -259,13 +260,43 @@ model GaRun {
   startedAt        DateTime? @map("started_at")
   finishedAt       DateTime? @map("finished_at")
   createdAt        DateTime  @default(now()) @map("created_at")
+  batchId          String?   @map("batch_id") @db.Uuid
+  groupIndex       Int?      @map("group_index")
 
   cycle            ScheduleCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  batch            GaRunBatch?        @relation(fields: [batchId], references: [id], onDelete: Cascade)
   scheduleVersions ScheduleVersion[]
   violations       GaViolation[]
 
   @@index([cycleId, status])
+  @@index([batchId, status])
+  @@unique([batchId, groupIndex])
   @@map("ga_runs")
+}
+
+model GaRunBatch {
+  id                  String    @id @default(uuid()) @db.Uuid
+  cycleId             String    @map("cycle_id") @db.Uuid
+  scheduleVersionId   String    @unique @map("schedule_version_id") @db.Uuid
+  status              String    @default("queued")
+  targetWardIds       Json      @map("target_ward_ids")
+  groupCount          Int       @map("group_count")
+  completedGroupCount Int       @default(0) @map("completed_group_count")
+  failedGroupCount    Int       @default(0) @map("failed_group_count")
+  hardScore           Decimal?  @map("hard_score") @db.Decimal(20, 4)
+  softScore           Decimal?  @map("soft_score") @db.Decimal(20, 4)
+  objective           Decimal?  @db.Decimal(20, 4)
+  fitness             Decimal?  @db.Decimal(20, 10)
+  startedAt           DateTime? @map("started_at")
+  finishedAt          DateTime? @map("finished_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  cycle           ScheduleCycle   @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  scheduleVersion ScheduleVersion @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
+  runs            GaRun[]
+
+  @@index([cycleId, status])
+  @@map("ga_run_batches")
 }
 
 model GaSetting {
@@ -290,9 +321,6 @@ model GaSetting {
   maxConsecutiveWorkDays     Int      @map("max_consecutive_work_days")
   maxTraineePerShift         Int      @map("max_trainee_per_shift")
   minRestHours               Int      @map("min_rest_hours")
-  workloadBalanceMaxDiff     Int      @map("workload_balance_max_diff")
-  shiftCountBalanceMaxDiff   Int      @map("shift_count_balance_max_diff")
-  shiftTypeBalanceMaxDiff    Int      @map("shift_type_balance_max_diff")
   targetOffDaysPerStaff      Int?     @map("target_off_days_per_staff")
   enableMorningEveningDouble Boolean  @default(false) @map("enable_morning_evening_double")
   enableNightEveningDouble   Boolean  @default(false) @map("enable_night_evening_double")
@@ -325,6 +353,7 @@ model ScheduleVersion {
   assignments           ScheduleAssignment[]
   manualChanges         ScheduleManualChange[]
   compensationSummaries WardCompensationSummary[]
+  gaBatch               GaRunBatch?
 
   @@unique([cycleId, versionNo])
   @@index([cycleId, status])

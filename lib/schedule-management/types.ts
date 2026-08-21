@@ -73,3 +73,19 @@ export type StaffingRequirements = {
   morning?: ShiftStaffingRequirement;
   afternoon?: ShiftStaffingRequirement;
 };
+
+export type PreflightSettings = {
+  maxShiftsPer7Days: number;
+  maxConsecutiveWorkDays: number;
+  maxTraineePerShift: number;
+  enableMorningEveningDouble: boolean;
+  enableNightEveningDouble: boolean;
+  morningRegularRequired: boolean;
+};
+
+export type SharedStaffUsage = {
+  staffId: string;
+  staffCode: string;
+  fullName: string;
+  otherWardCodes: string[];
+};

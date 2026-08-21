@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 
 import {
   startGaRunAction,
+  previewGaRunGroupsAction,
+  type PreviewGaRunGroupsActionResult,
   type StartGaRunActionResult,
 } from "@/app/actions/ga-runs";
 import { Button } from "@/components/ui/button";
@@ -26,19 +28,56 @@ export function StartGaRunButton({ round, onStarted }: StartGaRunButtonProps) {
   const [result, setResult] = useState<
     Extract<StartGaRunActionResult, { status: "error" }> | null
   >(null);
+  const [groupPreview, setGroupPreview] =
+    useState<PreviewGaRunGroupsActionResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!isOpen || targetWardIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      const preview = await previewGaRunGroupsAction({
+        cycleId: round.id,
+        targetWardIds,
+      });
+      if (!cancelled) {
+        setGroupPreview(preview);
+        setIsAnalyzing(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [isOpen, round.id, targetWardIds]);
 
   function handleOpenChange(open: boolean) {
     setIsOpen(open);
 
     if (open) {
-      setTargetWardIds(getReadyWardIds(round));
+      const readyWardIds = getReadyWardIds(round);
+      setTargetWardIds(readyWardIds);
+      setGroupPreview(null);
+      setIsAnalyzing(readyWardIds.length > 0);
     }
 
     if (!open) {
       setResult(null);
       setTargetWardIds(getReadyWardIds(round));
+      setGroupPreview(null);
+      setIsAnalyzing(false);
     }
+  }
+
+  function handleTargetWardIdsChange(wardIds: string[]) {
+    setTargetWardIds(wardIds);
+    setGroupPreview(null);
+    setIsAnalyzing(wardIds.length > 0);
   }
 
   function handleStartGaRun() {
@@ -83,9 +122,11 @@ export function StartGaRunButton({ round, onStarted }: StartGaRunButtonProps) {
         round={round}
         open={isOpen}
         isPending={isPending}
+        isAnalyzing={isAnalyzing}
         result={result}
+        groupPreview={groupPreview}
         targetWardIds={targetWardIds}
-        onTargetWardIdsChange={setTargetWardIds}
+        onTargetWardIdsChange={handleTargetWardIdsChange}
         onOpenChange={handleOpenChange}
         onConfirm={handleStartGaRun}
       />

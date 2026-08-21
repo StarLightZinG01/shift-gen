@@ -12,6 +12,9 @@ export async function getCompensationSummary(
 ): Promise<CompensationSummaryData> {
   const versions = await prisma.scheduleVersion.findMany({
     where: {
+      status: {
+        notIn: ["generating", "failed"],
+      },
       assignments: {
         some: {},
       },

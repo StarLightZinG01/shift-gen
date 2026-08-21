@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { ReadinessCheckCard } from "@/components/features/schedule-management/ReadinessCheckCard";
+import { PreflightRiskAssessment } from "@/components/features/schedule-management/PreflightRiskAssessment";
 import { ScheduleManagementForm } from "@/components/features/schedule-management/ScheduleManagementForm";
 import { StaffTable as StaffDraftTable } from "@/components/features/schedule-management/StaffTable";
 import { WardSummaryCard } from "@/components/features/schedule-management/WardSummaryCard";
@@ -47,6 +48,8 @@ import type {
   CycleContext,
   ExternalStaffCandidate,
   RequestSummaryRow,
+  PreflightSettings,
+  SharedStaffUsage,
   StaffingRequirements,
   StaffRow,
   WardContext,
@@ -59,6 +62,8 @@ type ScheduleManagementViewProps = {
   staffRows: StaffRow[];
   requestRows: RequestSummaryRow[];
   staffingRequirements: StaffingRequirements | null;
+  preflightSettings: PreflightSettings;
+  sharedStaffUsage: SharedStaffUsage[];
   mode?: "ward_head" | "admin";
 };
 
@@ -69,6 +74,8 @@ export function ScheduleManagementView({
   staffRows,
   requestRows,
   staffingRequirements,
+  preflightSettings,
+  sharedStaffUsage,
   mode = "ward_head",
 }: ScheduleManagementViewProps) {
   const monthYearLabel = formatMonthYear(cycle.month, cycle.year);
@@ -137,7 +144,10 @@ export function ScheduleManagementView({
         </section>
       ) : null}
 
-      <ScheduleManagementForm>
+      <ScheduleManagementForm
+        initialStaffRows={staffRows}
+        initialStaffingRequirements={staffingRequirements}
+      >
         <input name="cycleId" type="hidden" value={cycle.id ?? ""} />
         <input name="wardId" type="hidden" value={ward?.id ?? ""} />
         <input name="mode" type="hidden" value={mode} />
@@ -163,10 +173,7 @@ export function ScheduleManagementView({
         <RequestSummaryTable requestRows={requestRows} ward={ward} />
 
         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
-          <ReadinessCheckCard
-            staffRows={staffRows}
-            staffingRequirements={staffingRequirements}
-          />
+          <ReadinessCheckCard />
           <WardSummaryCard
             requestRows={requestRows}
             staffRows={staffRows}
@@ -174,6 +181,11 @@ export function ScheduleManagementView({
             ward={ward}
           />
         </div>
+        <PreflightRiskAssessment
+          cycle={cycle}
+          settings={preflightSettings}
+          sharedStaffUsage={sharedStaffUsage}
+        />
         <Button
           type="submit"
           disabled={!canSaveData}

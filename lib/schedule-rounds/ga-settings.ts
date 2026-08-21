@@ -26,9 +26,6 @@ type GaSettingsRow = {
   max_consecutive_work_days: number;
   max_trainee_per_shift: number;
   min_rest_hours: number;
-  workload_balance_max_diff: number;
-  shift_count_balance_max_diff: number;
-  shift_type_balance_max_diff: number;
   target_off_days_per_staff: number | null;
   enable_morning_evening_double: boolean;
   enable_night_evening_double: boolean;
@@ -66,9 +63,6 @@ export async function getGaSettingsData(): Promise<GaSettingsData> {
         max_consecutive_work_days,
         max_trainee_per_shift,
         min_rest_hours,
-        workload_balance_max_diff,
-        shift_count_balance_max_diff,
-        shift_type_balance_max_diff,
         target_off_days_per_staff,
         enable_morning_evening_double,
         enable_night_evening_double,
@@ -117,9 +111,6 @@ export async function getGaSettingsProfiles(): Promise<GaSettingsData[]> {
         max_consecutive_work_days,
         max_trainee_per_shift,
         min_rest_hours,
-        workload_balance_max_diff,
-        shift_count_balance_max_diff,
-        shift_type_balance_max_diff,
         target_off_days_per_staff,
         enable_morning_evening_double,
         enable_night_evening_double,
@@ -193,9 +184,6 @@ export async function saveGaSettingsData(input: SaveGaSettingsInput, userId: str
       max_consecutive_work_days,
       max_trainee_per_shift,
       min_rest_hours,
-      workload_balance_max_diff,
-      shift_count_balance_max_diff,
-      shift_type_balance_max_diff,
       target_off_days_per_staff,
       enable_morning_evening_double,
       enable_night_evening_double,
@@ -226,9 +214,6 @@ export async function saveGaSettingsData(input: SaveGaSettingsInput, userId: str
       ${input.maxConsecutiveWorkDays},
       ${input.maxTraineePerShift},
       ${input.minRestHours},
-      ${input.workloadBalanceMaxDiff},
-      ${input.shiftCountBalanceMaxDiff},
-      ${input.shiftTypeBalanceMaxDiff},
       ${input.targetOffDaysPerStaff},
       ${input.enableMorningEveningDouble},
       ${input.enableNightEveningDouble},
@@ -257,9 +242,6 @@ export async function saveGaSettingsData(input: SaveGaSettingsInput, userId: str
       max_consecutive_work_days = EXCLUDED.max_consecutive_work_days,
       max_trainee_per_shift = EXCLUDED.max_trainee_per_shift,
       min_rest_hours = EXCLUDED.min_rest_hours,
-      workload_balance_max_diff = EXCLUDED.workload_balance_max_diff,
-      shift_count_balance_max_diff = EXCLUDED.shift_count_balance_max_diff,
-      shift_type_balance_max_diff = EXCLUDED.shift_type_balance_max_diff,
       target_off_days_per_staff = EXCLUDED.target_off_days_per_staff,
       enable_morning_evening_double = EXCLUDED.enable_morning_evening_double,
       enable_night_evening_double = EXCLUDED.enable_night_evening_double,
@@ -293,9 +275,6 @@ function mapGaSettingsRow(row: GaSettingsRow): GaSettingsData {
     maxConsecutiveWorkDays: row.max_consecutive_work_days,
     maxTraineePerShift: row.max_trainee_per_shift,
     minRestHours: row.min_rest_hours,
-    workloadBalanceMaxDiff: row.workload_balance_max_diff,
-    shiftCountBalanceMaxDiff: row.shift_count_balance_max_diff,
-    shiftTypeBalanceMaxDiff: row.shift_type_balance_max_diff,
     targetOffDaysPerStaff: row.target_off_days_per_staff,
     enableMorningEveningDouble: row.enable_morning_evening_double,
     enableNightEveningDouble: row.enable_night_evening_double,

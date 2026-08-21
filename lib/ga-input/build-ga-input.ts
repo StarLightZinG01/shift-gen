@@ -2,13 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { getGaSettingsData } from "@/lib/schedule-rounds/ga-settings";
 
 import {
-  applyCompensationFallback,
   buildMonthInfo,
-  COMPENSATION_RATES,
-  defaultBaseRuleSettings,
   defaultPenalties,
   defaultRules,
-  defaultRulesNote,
   defaultShifts,
   normalizeRequestType,
   normalizeShiftCode,
@@ -18,6 +14,7 @@ import {
   toDateTimeString,
   toNumber,
 } from "./formatters";
+import { MAX_CONSECUTIVE_NIGHTS } from "./constants";
 import type {
   GaAvailabilityRequestInput,
   GaInput,
@@ -201,7 +198,6 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
 
   const gaSettings = await getGaSettingsData();
   const holidayDays = await getCycleHolidayDays(cycle.id);
-  const baseRuleSettings = defaultBaseRuleSettings();
   const enableMorningEveningDouble = true;
   const enableNightEveningDouble = true;
   const rules = {
@@ -214,8 +210,7 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       ...(enableMorningEveningDouble ? [["ช", "บ"]] : []),
       ...(enableNightEveningDouble ? [["ด", "บ"]] : []),
     ],
-    weekly_min_days_off: gaSettings.weeklyMinDaysOff,
-    max_consecutive_nights: gaSettings.maxConsecutiveNights,
+    max_consecutive_nights: MAX_CONSECUTIVE_NIGHTS,
     min_rest_hours: gaSettings.minRestHours,
     max_consecutive_work_days: gaSettings.maxConsecutiveWorkDays,
     target_off_days_per_staff: null,
@@ -271,11 +266,9 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
     monthInfo,
     availabilityRequests: requests,
     preferredShiftRequests: buildPreferredShiftRequests(requests),
-    compensationRates: COMPENSATION_RATES,
-    base_rule_settings: baseRuleSettings,
     rules,
     trainee_rule: {
-      enabled: baseRuleSettings.traineePerShift,
+      enabled: true,
       max_per_shift: gaSettings.maxTraineePerShift,
       max_trainee_per_shift: gaSettings.maxTraineePerShift,
     },
@@ -287,11 +280,8 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
         },
         max_consecutive_work_days: gaSettings.maxConsecutiveWorkDays,
       },
-      soft: {
-        balance_double_shift: baseRuleSettings.doubleShiftBalance,
-      },
     },
-    penalties: defaultPenalties(baseRuleSettings),
+    penalties: defaultPenalties(),
     ga: {
       population_size: gaSettings.populationSize,
       generations: gaSettings.generations,
@@ -308,7 +298,6 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       repair_elite_every: gaSettings.repairEliteEvery,
     },
     custom_rules: [],
-    default_rules_note: defaultRulesNote(baseRuleSettings),
   };
 
   return {
@@ -381,12 +370,8 @@ function mapStaffRecordToWardStaff(
     isTrainee: staff.isTrainee,
     position: staff.position ?? "",
     payPosition: staff.payPosition ?? staff.position ?? "",
-    otRate: applyCompensationFallback(staff.payPosition ?? "", toNumber(staff.otRate), "otRate"),
-    shiftPayRate: applyCompensationFallback(
-      staff.payPosition ?? "",
-      toNumber(staff.shiftPayRate),
-      "shiftPayRate",
-    ),
+    otRate: toNumber(staff.otRate),
+    shiftPayRate: toNumber(staff.shiftPayRate),
     regularWorkTarget: null,
   };
 }
@@ -438,12 +423,8 @@ function mapSnapshotToWardStaff(
     isTrainee: snapshot.isTrainee,
     position: snapshot.position ?? "",
     payPosition: snapshot.payPosition ?? snapshot.position ?? "",
-    otRate: applyCompensationFallback(snapshot.payPosition ?? "", toNumber(snapshot.otRate), "otRate"),
-    shiftPayRate: applyCompensationFallback(
-      snapshot.payPosition ?? "",
-      toNumber(snapshot.shiftPayRate),
-      "shiftPayRate",
-    ),
+    otRate: toNumber(snapshot.otRate),
+    shiftPayRate: toNumber(snapshot.shiftPayRate),
     regularWorkTarget: null,
   };
 }

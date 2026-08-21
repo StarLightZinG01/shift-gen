@@ -86,6 +86,10 @@ export function canAccessPath(roles: string[], pathname: string) {
 }
 
 export function getPageTitle(pathname: string) {
+  if (pathname === "/home/account-settings") {
+    return "ตั้งค่าบัญชี";
+  }
+
   const currentItem = appNavigationItems
     .filter((item) => isActivePath(pathname, item.url))
     .sort((a, b) => b.url.length - a.url.length)[0];

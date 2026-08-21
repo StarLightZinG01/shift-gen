@@ -9,6 +9,9 @@ export type ManualScheduleWardOption = {
   id: string;
   code: string;
   name: string;
+  hardScore: string | null;
+  softScore: string | null;
+  isFeasible: boolean | null;
   objective: string | null;
   fitness: string | null;
   generatedAtLabel: string;
@@ -86,6 +89,10 @@ export type ManualScheduleData = {
     status: string;
     parentVersionId: string | null;
     gaScore: {
+      scoringMethod: string | null;
+      hardScore: string | null;
+      softScore: string | null;
+      isFeasible: boolean | null;
       objective: string | null;
       fitness: string | null;
       sourceLabel: string;

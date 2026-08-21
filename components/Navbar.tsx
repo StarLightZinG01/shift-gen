@@ -7,6 +7,7 @@ export default async function Navbar() {
   return (
     <NavbarClient
       employeeCode={session?.employeeCode ?? session?.username ?? null}
+      displayName={session?.displayName ?? null}
       role={formatRoleName(session?.roles[0])}
     />
   );

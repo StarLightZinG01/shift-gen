@@ -1,14 +1,83 @@
 import { prisma } from "@/lib/prisma";
+import { getGaSettingsData } from "@/lib/schedule-rounds/ga-settings";
 
 import { mockCycle } from "./mock-data";
 import type {
   CycleContext,
   ExternalStaffCandidate,
   RequestSummaryRow,
+  PreflightSettings,
+  SharedStaffUsage,
   StaffingRequirements,
   StaffRow,
   WardContext,
 } from "./types";
+
+export async function getSchedulePreflightContext(
+  cycleId: string | null,
+  wardId: string,
+): Promise<{
+  settings: PreflightSettings;
+  sharedStaffUsage: SharedStaffUsage[];
+}> {
+  const [gaSettings, otherWardSelections] = await Promise.all([
+    getGaSettingsData(),
+    cycleId
+      ? prisma.wardCycleExternalStaff.findMany({
+          where: {
+            cycleId,
+            wardId: { not: wardId },
+          },
+          include: {
+            staff: {
+              select: {
+                staffCode: true,
+                fullName: true,
+              },
+            },
+            ward: {
+              select: {
+                code: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const usageByStaff = new Map<string, SharedStaffUsage>();
+
+  for (const selection of otherWardSelections) {
+    const existing = usageByStaff.get(selection.staffId);
+    if (existing) {
+      if (!existing.otherWardCodes.includes(selection.ward.code)) {
+        existing.otherWardCodes.push(selection.ward.code);
+      }
+      continue;
+    }
+
+    usageByStaff.set(selection.staffId, {
+      staffId: selection.staffId,
+      staffCode: selection.staff.staffCode,
+      fullName: selection.staff.fullName,
+      otherWardCodes: [selection.ward.code],
+    });
+  }
+
+  return {
+    settings: {
+      maxShiftsPer7Days: gaSettings.maxShiftsPer7Days,
+      maxConsecutiveWorkDays: gaSettings.maxConsecutiveWorkDays,
+      maxTraineePerShift: gaSettings.maxTraineePerShift,
+      enableMorningEveningDouble: gaSettings.enableMorningEveningDouble,
+      enableNightEveningDouble: gaSettings.enableNightEveningDouble,
+      morningRegularRequired: gaSettings.morningRegularRequired,
+    },
+    sharedStaffUsage: Array.from(usageByStaff.values()).map((usage) => ({
+      ...usage,
+      otherWardCodes: usage.otherWardCodes.sort(),
+    })),
+  };
+}
 
 export async function getWardContext(
   userId: string,

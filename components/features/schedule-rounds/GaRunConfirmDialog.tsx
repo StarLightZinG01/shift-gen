@@ -3,7 +3,10 @@
 import { AlertCircleIcon, PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import type { StartGaRunActionResult } from "@/app/actions/ga-runs";
+import type {
+  PreviewGaRunGroupsActionResult,
+  StartGaRunActionResult,
+} from "@/app/actions/ga-runs";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +26,9 @@ type GaRunConfirmDialogProps = {
   round: ScheduleRoundRow;
   open: boolean;
   isPending: boolean;
+  isAnalyzing: boolean;
   result: Extract<StartGaRunActionResult, { status: "error" }> | null;
+  groupPreview: PreviewGaRunGroupsActionResult | null;
   targetWardIds: string[];
   onTargetWardIdsChange: (wardIds: string[]) => void;
   onOpenChange: (open: boolean) => void;
@@ -34,7 +39,9 @@ export function GaRunConfirmDialog({
   round,
   open,
   isPending,
+  isAnalyzing,
   result,
+  groupPreview,
   targetWardIds,
   onTargetWardIdsChange,
   onOpenChange,
@@ -170,14 +177,55 @@ export function GaRunConfirmDialog({
             />
           </div>
 
+          <div className="space-y-3 rounded-2xl border bg-white p-4">
+            <div>
+              <p className="text-sm font-semibold">กลุ่มงานที่ระบบวิเคราะห์ได้</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                วอร์ดที่มีบุคลากรขึ้นร่วมกันจะถูกจัดใน GA Run เดียวกัน
+              </p>
+            </div>
+            {isAnalyzing ? (
+              <p className="text-sm text-muted-foreground">กำลังวิเคราะห์ความเชื่อมโยง...</p>
+            ) : groupPreview?.status === "success" ? (
+              <div className="space-y-2">
+                {groupPreview.groups.map((group) => (
+                  <div
+                    key={group.index}
+                    className="rounded-xl border border-[#DDEBED] bg-[#F8FDFE] px-3 py-2.5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">
+                        กลุ่ม {group.index}: {group.wardCodes.join(", ")}
+                      </p>
+                      <span className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand">
+                        {group.wardCodes.length} วอร์ด
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {group.sharedStaffCodes.length > 0
+                        ? `บุคลากรร่วม: ${group.sharedStaffCodes.join(", ")}`
+                        : "ไม่มีบุคลากรที่ใช้ร่วมกับวอร์ดอื่นในกลุ่ม"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : groupPreview?.status === "error" ? (
+              <Notice tone="warning">{groupPreview.message}</Notice>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                เลือกวอร์ดเพื่อให้ระบบวิเคราะห์กลุ่มงาน
+              </p>
+            )}
+          </div>
+
           {targetWardIds.length === 0 ? (
             <Notice tone="warning">
               กรุณาเลือกอย่างน้อย 1 วอร์ดก่อนเริ่ม GA
             </Notice>
           ) : (
             <Notice tone="success">
-              ระบบจะส่ง {targetWardIds.length} วอร์ดที่เลือกเข้า GA พร้อมกัน
-              เพื่อให้คนที่ขึ้นเวรข้ามวอร์ดถูกจัดร่วมกันในงานเดียว
+              ระบบจะแบ่ง {targetWardIds.length} วอร์ดเป็นกลุ่มอัตโนมัติ
+              และจัดวอร์ดที่มีบุคลากรร่วมกันในงานเดียว
             </Notice>
           )}
 
@@ -212,7 +260,12 @@ export function GaRunConfirmDialog({
           <Button
             type="button"
             onClick={onConfirm}
-            disabled={isPending || targetWardIds.length === 0}
+            disabled={
+              isPending ||
+              isAnalyzing ||
+              targetWardIds.length === 0 ||
+              groupPreview?.status !== "success"
+            }
           >
             <HugeiconsIcon icon={PlayIcon} size={17} strokeWidth={2} />
             {isPending ? "กำลังสร้างงาน..." : "ยืนยันเริ่ม GA"}

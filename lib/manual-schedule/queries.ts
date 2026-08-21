@@ -20,6 +20,9 @@ export async function getManualScheduleData({
 } = {}): Promise<ManualScheduleData> {
   const versions = await prisma.scheduleVersion.findMany({
     where: {
+      status: {
+        notIn: ["generating", "failed"],
+      },
       assignments: {
         some: {},
       },
@@ -30,6 +33,24 @@ export async function getManualScheduleData({
         select: {
           objective: true,
           fitness: true,
+          settingsSnapshot: true,
+        },
+      },
+      gaBatch: {
+        select: {
+          hardScore: true,
+          softScore: true,
+          objective: true,
+          fitness: true,
+          runs: {
+            select: {
+              id: true,
+              inputSnapshot: true,
+              objective: true,
+              fitness: true,
+              settingsSnapshot: true,
+            },
+          },
         },
       },
       parentVersion: {
@@ -39,6 +60,24 @@ export async function getManualScheduleData({
             select: {
               objective: true,
               fitness: true,
+              settingsSnapshot: true,
+            },
+          },
+          gaBatch: {
+            select: {
+              hardScore: true,
+              softScore: true,
+              objective: true,
+              fitness: true,
+              runs: {
+                select: {
+                  id: true,
+                  inputSnapshot: true,
+                  objective: true,
+                  fitness: true,
+                  settingsSnapshot: true,
+                },
+              },
             },
           },
         },
@@ -90,7 +129,7 @@ export async function getManualScheduleData({
 
   if (!selectedWard) {
     return {
-      ...baseData(version, versions),
+      ...baseData(version, versions, null),
       selectedWardId: null,
       selectedWardLabel: "ยังไม่มีวอร์ดในตารางนี้",
       daysInMonth,
@@ -98,7 +137,11 @@ export async function getManualScheduleData({
     };
   }
 
-  const violationGaRunId = version.gaRunId ?? version.parentVersion?.gaRunId ?? null;
+  const scoreBatch = version.gaBatch ?? version.parentVersion?.gaBatch ?? null;
+  const violationGaRunId =
+    version.gaRunId ??
+    version.parentVersion?.gaRunId ??
+    findBatchRunIdForWard(scoreBatch?.runs ?? [], selectedWard.id);
   const [assignments, manualChanges, staffOptions, violations] = await Promise.all([
     prisma.scheduleAssignment.findMany({
       where: {
@@ -138,7 +181,7 @@ export async function getManualScheduleData({
   const violationsByCell = groupViolationsByCell(violations);
 
   return {
-    ...baseData(version, versions),
+    ...baseData(version, versions, selectedWard.id),
     selectedWardId: selectedWard.id,
     selectedWardLabel: `${selectedWard.code} - ${selectedWard.name}`,
     wardOptions: buildWardOptions(wards, version, latestManualChangesByWardId),
@@ -168,6 +211,40 @@ async function getEligibleStaffOptions(): Promise<ManualScheduleStaffOption[]> {
     fullName: member.fullName,
     homeWardCode: member.homeWard?.code ?? "-",
   }));
+}
+
+function findBatchRunIdForWard(
+  runs: Array<GaScoreRunRecord & { id: string; inputSnapshot: unknown }>,
+  wardId: string,
+) {
+  return findBatchRunForWard(runs, wardId)?.id ?? null;
+}
+
+function findBatchRunForWard<T extends { inputSnapshot: unknown }>(
+  runs: T[],
+  wardId: string,
+): T | null {
+  for (const run of runs) {
+    const snapshot = run.inputSnapshot;
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+      continue;
+    }
+    const wards = (snapshot as Record<string, unknown>).wards;
+    if (
+      Array.isArray(wards) &&
+      wards.some(
+        (ward) =>
+          ward !== null &&
+          typeof ward === "object" &&
+          !Array.isArray(ward) &&
+          (ward as Record<string, unknown>).id === wardId,
+      )
+    ) {
+      return run;
+    }
+  }
+
+  return null;
 }
 
 async function getLatestManualChangeByWard(versionId: string, wardIds: string[]) {
@@ -240,34 +317,35 @@ function buildWardOptions(
   }>,
   version: {
     createdAt: Date;
-    gaRun?: {
-      objective: unknown;
-      fitness: unknown;
-    } | null;
+    gaRun?: GaScoreRunRecord | null;
+    gaBatch?: GaScoreBatchRecord | null;
     parentVersion?: {
-      gaRun?: {
-        objective: unknown;
-        fitness: unknown;
-      } | null;
+      gaRun?: GaScoreRunRecord | null;
+      gaBatch?: GaScoreBatchRecord | null;
     } | null;
   },
   latestManualChangesByWardId: Map<string, Date>,
 ): ManualScheduleWardOption[] {
-  const gaScoreRun = version.gaRun ?? version.parentVersion?.gaRun ?? null;
+  const standaloneGaRun = version.gaRun ?? version.parentVersion?.gaRun ?? null;
+  const gaBatch = version.gaBatch ?? version.parentVersion?.gaBatch ?? null;
 
-  return wards.map((ward) => ({
-    id: ward.id,
-    code: ward.code,
-    name: ward.name,
-    objective: gaScoreRun?.objective === null || gaScoreRun?.objective === undefined
-      ? null
-      : String(gaScoreRun.objective),
-    fitness: gaScoreRun?.fitness === null || gaScoreRun?.fitness === undefined
-      ? null
-      : String(gaScoreRun.fitness),
-    generatedAtLabel: formatDateTimeLabel(version.createdAt),
-    latestEditedAtLabel: formatDateTimeLabel(latestManualChangesByWardId.get(ward.id) ?? null),
-  }));
+  return wards.map((ward) => {
+    const wardGaRun = standaloneGaRun ?? findBatchRunForWard(gaBatch?.runs ?? [], ward.id);
+    const scoreData = resolveGaScoreData(wardGaRun, null);
+
+    return {
+      id: ward.id,
+      code: ward.code,
+      name: ward.name,
+      hardScore: scoreData.hardScore,
+      softScore: scoreData.softScore,
+      isFeasible: scoreData.isFeasible,
+      objective: scoreData.objective,
+      fitness: scoreData.fitness,
+      generatedAtLabel: formatDateTimeLabel(version.createdAt),
+      latestEditedAtLabel: formatDateTimeLabel(latestManualChangesByWardId.get(ward.id) ?? null),
+    };
+  });
 }
 
 function emptyData(): ManualScheduleData {
@@ -304,16 +382,12 @@ function baseData(
       year: number;
     };
     gaRunId: string | null;
-    gaRun?: {
-      objective: unknown;
-      fitness: unknown;
-    } | null;
+    gaRun?: GaScoreRunRecord | null;
+    gaBatch?: GaScoreBatchRecord | null;
     parentVersion?: {
       gaRunId: string | null;
-      gaRun?: {
-        objective: unknown;
-        fitness: unknown;
-      } | null;
+      gaRun?: GaScoreRunRecord | null;
+      gaBatch?: GaScoreBatchRecord | null;
     } | null;
   },
   versions: Array<{
@@ -326,8 +400,18 @@ function baseData(
       year: number;
     };
   }>,
+  selectedWardId: string | null,
 ): ManualScheduleData {
-  const gaScoreRun = version.gaRun ?? version.parentVersion?.gaRun ?? null;
+  const directGaRun = version.gaRun ?? null;
+  const directGaBatch = version.gaBatch ?? null;
+  const inheritedGaBatch = directGaBatch ?? version.parentVersion?.gaBatch ?? null;
+  const wardGaRun = selectedWardId
+    ? findBatchRunForWard(inheritedGaBatch?.runs ?? [], selectedWardId)
+    : null;
+  const scoreData = resolveGaScoreData(
+    directGaRun ?? version.parentVersion?.gaRun ?? wardGaRun,
+    null,
+  );
 
   return {
     version: {
@@ -340,12 +424,15 @@ function baseData(
       source: version.source,
       status: version.status,
       parentVersionId: version.parentVersionId,
-      gaScore: gaScoreRun
+      gaScore: scoreData.hasScore
         ? {
-            objective:
-              gaScoreRun.objective === null ? null : String(gaScoreRun.objective),
-            fitness: gaScoreRun.fitness === null ? null : String(gaScoreRun.fitness),
-            sourceLabel: version.gaRun
+            scoringMethod: scoreData.scoringMethod,
+            hardScore: scoreData.hardScore,
+            softScore: scoreData.softScore,
+            isFeasible: scoreData.isFeasible,
+            objective: scoreData.objective,
+            fitness: scoreData.fitness,
+            sourceLabel: directGaRun || directGaBatch
               ? "คะแนนจาก GA ของตารางนี้"
               : "คะแนนจาก GA ของตารางต้นฉบับ",
           }
@@ -371,6 +458,105 @@ function baseData(
     coverageWarnings: [],
     violations: [],
   };
+}
+
+function readConstraintScores(settingsSnapshot: unknown) {
+  const empty = {
+    scoringMethod: null as string | null,
+    hardScore: null as string | null,
+    softScore: null as string | null,
+    isFeasible: null as boolean | null,
+  };
+
+  if (!settingsSnapshot || typeof settingsSnapshot !== "object" || Array.isArray(settingsSnapshot)) {
+    return empty;
+  }
+
+  const debug = (settingsSnapshot as Record<string, unknown>).worker_score_debug;
+  if (!debug || typeof debug !== "object" || Array.isArray(debug)) {
+    return empty;
+  }
+
+  const score = debug as Record<string, unknown>;
+  const toScore = (value: unknown) =>
+    value === null || value === undefined ? null : String(value);
+
+  return {
+    scoringMethod:
+      typeof score.scoring_method === "string" ? score.scoring_method : null,
+    hardScore: toScore(score.hard_score),
+    softScore: toScore(score.soft_score),
+    isFeasible:
+      typeof score.is_feasible === "boolean" ? score.is_feasible : null,
+  };
+}
+
+type GaScoreRunRecord = {
+  objective: unknown;
+  fitness: unknown;
+  settingsSnapshot: unknown;
+};
+
+type GaScoreBatchRecord = {
+  hardScore: unknown;
+  softScore: unknown;
+  objective: unknown;
+  fitness: unknown;
+  runs: Array<GaScoreRunRecord & { id: string; inputSnapshot: unknown }>;
+};
+
+function resolveGaScoreData(
+  gaRun: GaScoreRunRecord | null,
+  gaBatch: GaScoreBatchRecord | null,
+) {
+  if (gaBatch) {
+    const hardScore = toNullableScore(gaBatch.hardScore);
+    const softScore = toNullableScore(gaBatch.softScore);
+    const storedObjective = toNullableScore(gaBatch.objective);
+    return {
+      hasScore: hardScore !== null || softScore !== null || storedObjective !== null,
+      scoringMethod: "constraint_domination_v1",
+      hardScore,
+      softScore,
+      isFeasible: hardScore === null ? null : Number(hardScore) === 0,
+      objective: getDisplayedObjective({ hardScore, softScore }, storedObjective),
+      fitness: toNullableScore(gaBatch.fitness),
+    };
+  }
+
+  const constraintScores = readConstraintScores(gaRun?.settingsSnapshot);
+  const storedObjective = toNullableScore(gaRun?.objective);
+  return {
+    hasScore: gaRun !== null,
+    ...constraintScores,
+    objective: getDisplayedObjective(constraintScores, storedObjective),
+    fitness: toNullableScore(gaRun?.fitness),
+  };
+}
+
+function toNullableScore(value: unknown) {
+  return value === null || value === undefined ? null : String(value);
+}
+
+function getDisplayedObjective(
+  scores: {
+    hardScore: string | null;
+    softScore: string | null;
+  },
+  storedObjective: string | null,
+) {
+  if (scores.hardScore === null || scores.softScore === null) {
+    return storedObjective;
+  }
+
+  const hardScore = Number(scores.hardScore);
+  const softScore = Number(scores.softScore);
+
+  if (!Number.isFinite(hardScore) || !Number.isFinite(softScore)) {
+    return storedObjective;
+  }
+
+  return String(hardScore + softScore);
 }
 
 function buildRows(
@@ -551,10 +737,11 @@ function formatConstraintLabel(code: string) {
     coverage_under: "กำลังคนต่ำกว่าที่กำหนด",
     coverage_over: "กำลังคนเกินที่กำหนด",
     one_shift_per_day: "บุคลากรมีเวรซ้ำในวันเดียว",
-    requested_off_assignment: "จัดเวรทับวันลา/วันหยุดที่ขอ",
+    requested_off_assignment: "จัดเวรไม่ตรงตามคำขอ",
     unavailable_assignment: "จัดเวรในวันที่เข้าเวรไม่ได้",
     weekly_max_shifts: "เวรเกิน 10 เวรใน 7 วัน",
     max_consecutive_work_days: "ทำงานติดกันเกินกำหนด",
+    consecutive_night: "เวรดึกติดต่อกันเกิน 2 เวร",
     consecutive_work_days: "ทำงานติดกันเกินกำหนด",
     rest_period: "พักหลังเวรไม่พอ",
     short_rest_warning: "พักระหว่างเวรน้อยกว่าเกณฑ์",
@@ -571,8 +758,6 @@ function formatConstraintLabel(code: string) {
     morning_regular_required: "เวรเช้าไม่มีเวรปกติ",
     ot_shift_must_be_assigned: "OT ไม่ตรงกับเวรที่จัด",
     no_duplicate_regular_ot: "เวรปกติและ OT ซ้ำกัน",
-    max_ot_per_staff: "OT เกินเป้าหมายต่อคน",
-    preferred_shift_request: "ไม่ได้จัดตามคำขอเข้าเวร",
     validation_error: "ข้อผิดพลาดจากการตรวจผล GA",
   };
 

@@ -38,14 +38,10 @@ type GaSettingsFormState = {
   randomSeed: string;
   maxSeconds: string;
   maxShiftsPer7Days: string;
-  weeklyMinDaysOff: string;
   maxConsecutiveNights: string;
   maxConsecutiveWorkDays: string;
   maxTraineePerShift: string;
   minRestHours: string;
-  workloadBalanceMaxDiff: string;
-  shiftCountBalanceMaxDiff: string;
-  shiftTypeBalanceMaxDiff: string;
 };
 
 export function GaSettingsPanel({ data, profiles }: GaSettingsPanelProps) {
@@ -121,7 +117,6 @@ export function GaSettingsPanel({ data, profiles }: GaSettingsPanelProps) {
         randomSeed: form.randomSeed,
         maxSeconds: form.maxSeconds,
         maxShiftsPer7Days: form.maxShiftsPer7Days,
-        weeklyMinDaysOff: form.weeklyMinDaysOff,
         maxConsecutiveNights: form.maxConsecutiveNights,
         maxConsecutiveWorkDays: form.maxConsecutiveWorkDays,
         maxTraineePerShift: form.maxTraineePerShift,
@@ -271,18 +266,6 @@ export function GaSettingsPanel({ data, profiles }: GaSettingsPanelProps) {
             onChange={(value) => updateField("maxShiftsPer7Days", value)}
           />
           <NumberField
-            label="วันหยุดขั้นต่ำต่อ 7 วัน"
-            min={0}
-            value={form.weeklyMinDaysOff}
-            onChange={(value) => updateField("weeklyMinDaysOff", value)}
-          />
-          <NumberField
-            label="เวรดึกติดกันสูงสุด"
-            min={1}
-            value={form.maxConsecutiveNights}
-            onChange={(value) => updateField("maxConsecutiveNights", value)}
-          />
-          <NumberField
             label="ทำงานติดกันสูงสุด"
             min={1}
             value={form.maxConsecutiveWorkDays}
@@ -299,27 +282,6 @@ export function GaSettingsPanel({ data, profiles }: GaSettingsPanelProps) {
             min={0}
             value={form.minRestHours}
             onChange={(value) => updateField("minRestHours", value)}
-          />
-        </SettingGroup>
-
-        <SettingGroup title="การกระจายภาระงาน" hidden>
-          <NumberField
-            label="ส่วนต่างภาระงานรวมสูงสุด"
-            min={0}
-            value={form.workloadBalanceMaxDiff}
-            onChange={(value) => updateField("workloadBalanceMaxDiff", value)}
-          />
-          <NumberField
-            label="ส่วนต่างจำนวนเวรรวมสูงสุด"
-            min={0}
-            value={form.shiftCountBalanceMaxDiff}
-            onChange={(value) => updateField("shiftCountBalanceMaxDiff", value)}
-          />
-          <NumberField
-            label="ส่วนต่างประเภทเวรสูงสุด"
-            min={0}
-            value={form.shiftTypeBalanceMaxDiff}
-            onChange={(value) => updateField("shiftTypeBalanceMaxDiff", value)}
           />
         </SettingGroup>
 
@@ -497,13 +459,9 @@ function mapDataToForm(data: GaSettingsData): GaSettingsFormState {
     randomSeed: data.randomSeed === null ? "" : String(data.randomSeed),
     maxSeconds: String(data.maxSeconds),
     maxShiftsPer7Days: String(data.maxShiftsPer7Days),
-    weeklyMinDaysOff: String(data.weeklyMinDaysOff),
     maxConsecutiveNights: String(data.maxConsecutiveNights),
     maxConsecutiveWorkDays: String(data.maxConsecutiveWorkDays),
     maxTraineePerShift: String(data.maxTraineePerShift),
     minRestHours: String(data.minRestHours),
-    workloadBalanceMaxDiff: String(data.workloadBalanceMaxDiff),
-    shiftCountBalanceMaxDiff: String(data.shiftCountBalanceMaxDiff),
-    shiftTypeBalanceMaxDiff: String(data.shiftTypeBalanceMaxDiff),
   };
 }

@@ -217,7 +217,6 @@ function getStaffAccumulator(
 
   const payPosition = normalizePayPosition(staff.payPosition ?? staff.position);
   const rates = resolveCompensationRates({
-    payPosition,
     otRate: staff.otRate,
     shiftPayRate: staff.shiftPayRate,
   });

@@ -6,10 +6,13 @@ import type { Prisma } from "@/app/generated/prisma/client";
 
 import { getCurrentSession } from "@/lib/auth/session";
 import { buildGaInput } from "@/lib/ga-input/build-ga-input";
-import type { GaInput } from "@/lib/ga-input/types";
-import { validateGaInput } from "@/lib/ga-input/validators";
 import { activeGaRunStatuses } from "@/lib/ga-runs/queries";
 import { buildGaRunReadiness } from "@/lib/ga-runs/validation";
+import {
+  buildGaWardGroups,
+  filterGaInputByWardIds,
+  type GaWardGroup,
+} from "@/lib/ga-runs/ward-groups";
 import { prisma } from "@/lib/prisma";
 
 export type StartGaRunActionResult =
@@ -17,6 +20,22 @@ export type StartGaRunActionResult =
       status: "success";
       message: string;
       gaRunId: string;
+      gaRunIds: string[];
+      batchId: string;
+      groupCount: number;
+    }
+  | {
+      status: "error";
+      message: string;
+      errors?: string[];
+      warnings?: string[];
+    };
+
+export type PreviewGaRunGroupsActionResult =
+  | {
+      status: "success";
+      groups: GaWardGroup[];
+      wardCount: number;
     }
   | {
       status: "error";
@@ -45,6 +64,7 @@ const startGaRunSchema = z.union([
   }),
 ]);
 const cancelGaRunSchema = z.string().uuid("ไม่พบรอบจัดตารางที่ถูกต้อง");
+const retryGaRunSchema = z.string().uuid("ไม่พบงาน GA ที่ถูกต้อง");
 
 export async function startGaRunAction(
   input:
@@ -128,7 +148,7 @@ export async function startGaRunAction(
   try {
     const fullGaInput = await buildGaInput(cycle.id);
     const gaInput = parsedData.targetWardIds
-      ? filterGaInputByWards(fullGaInput, parsedData.targetWardIds)
+      ? filterGaInputByWardIds(fullGaInput, parsedData.targetWardIds)
       : fullGaInput;
     const readiness = buildGaRunReadiness(gaInput);
 
@@ -141,30 +161,87 @@ export async function startGaRunAction(
       };
     }
 
-    const gaRun = await prisma.gaRun.create({
-      data: {
-        cycleId: cycle.id,
-        status: "queued",
-        inputSnapshot: gaInput as unknown as Prisma.InputJsonValue,
-        settingsSnapshot: buildSettingsSnapshot(
-          gaInput,
-          readiness,
-          parsedData.targetWardIds,
-        ) as Prisma.InputJsonValue,
-      },
-      select: {
-        id: true,
-      },
+    const groups = buildGaWardGroups(gaInput);
+    const groupInputs = groups.map((group) => {
+      const groupInput = filterGaInputByWardIds(gaInput, group.wardIds);
+      const groupReadiness = buildGaRunReadiness(groupInput);
+      return { group, input: groupInput, readiness: groupReadiness };
+    });
+    const invalidGroup = groupInputs.find((group) => !group.readiness.ok);
+
+    if (invalidGroup) {
+      return {
+        status: "error",
+        message: `ข้อมูลกลุ่ม ${invalidGroup.group.wardCodes.join(", ")} ยังไม่พร้อมจัดตาราง`,
+        errors: invalidGroup.readiness.errors,
+        warnings: invalidGroup.readiness.warnings,
+      };
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const latestVersion = await tx.scheduleVersion.aggregate({
+        where: { cycleId: cycle.id },
+        _max: { versionNo: true },
+      });
+      const scheduleVersion = await tx.scheduleVersion.create({
+        data: {
+          cycleId: cycle.id,
+          versionNo: (latestVersion._max.versionNo ?? 0) + 1,
+          source: "ga",
+          status: "generating",
+        },
+        select: { id: true },
+      });
+      const batch = await tx.gaRunBatch.create({
+        data: {
+          cycleId: cycle.id,
+          scheduleVersionId: scheduleVersion.id,
+          status: "queued",
+          targetWardIds: gaInput.wards.map((ward) => ward.id),
+          groupCount: groups.length,
+        },
+        select: { id: true },
+      });
+      const gaRuns = [];
+
+      for (const { group, input: groupInput, readiness: groupReadiness } of groupInputs) {
+        const gaRun = await tx.gaRun.create({
+          data: {
+            cycleId: cycle.id,
+            batchId: batch.id,
+            groupIndex: group.index,
+            status: "queued",
+            inputSnapshot: groupInput as unknown as Prisma.InputJsonValue,
+            settingsSnapshot: {
+              ...buildSettingsSnapshot(groupInput, groupReadiness, group.wardIds),
+              batchId: batch.id,
+              groupIndex: group.index,
+              groupWardCodes: group.wardCodes,
+              sharedStaffCodes: group.sharedStaffCodes,
+            } as Prisma.InputJsonValue,
+          },
+          select: { id: true },
+        });
+        gaRuns.push(gaRun);
+      }
+
+      await tx.scheduleCycle.update({
+        where: { id: cycle.id },
+        data: { status: "generating" },
+      });
+
+      return { batch, gaRuns };
     });
 
     revalidateGaRunPaths();
 
     return {
       status: "success",
-      message: parsedData.targetWardIds
-        ? `สร้างงาน GA สำหรับ ${parsedData.targetWardIds.length} วอร์ดที่เลือกแล้ว ระบบจะรอ worker มารับงานไปจัดตาราง`
-        : "สร้างงาน GA แล้ว ระบบจะรอ worker มารับงานไปจัดตาราง",
-      gaRunId: gaRun.id,
+      message: `แบ่ง ${gaInput.wards.length} วอร์ดเป็น ${groups.length} กลุ่ม และสร้างงาน GA แล้ว`,
+      gaRunId: created.gaRuns[0].id,
+      gaRunIds: created.gaRuns.map((run) => run.id),
+      batchId: created.batch.id,
+      groupCount: groups.length,
     };
   } catch (error) {
     return {
@@ -173,6 +250,55 @@ export async function startGaRunAction(
         error instanceof Error
           ? error.message
           : "ไม่สามารถเริ่มจัดตารางด้วย GA ได้",
+    };
+  }
+}
+
+export async function previewGaRunGroupsAction(input: {
+  cycleId: string;
+  targetWardIds: string[];
+}): Promise<PreviewGaRunGroupsActionResult> {
+  const session = await getCurrentSession();
+  if (!session?.roles.includes("admin")) {
+    return { status: "error", message: "บัญชีนี้ไม่มีสิทธิ์ดูการแบ่งกลุ่ม GA" };
+  }
+
+  const parsedInput = startGaRunSchema.safeParse(input);
+  if (!parsedInput.success || typeof parsedInput.data === "string") {
+    return {
+      status: "error",
+      message: parsedInput.success
+        ? "ข้อมูลสำหรับวิเคราะห์กลุ่มไม่ถูกต้อง"
+        : parsedInput.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง",
+    };
+  }
+
+  try {
+    const targetWardIds = normalizeTargetWardIds(parsedInput.data.targetWardIds);
+    if (!targetWardIds) {
+      return { status: "error", message: "กรุณาเลือกอย่างน้อย 1 วอร์ด" };
+    }
+    const fullGaInput = await buildGaInput(parsedInput.data.cycleId);
+    const gaInput = filterGaInputByWardIds(fullGaInput, targetWardIds);
+    const readiness = buildGaRunReadiness(gaInput);
+    if (!readiness.ok) {
+      return {
+        status: "error",
+        message: "ข้อมูลวอร์ดที่เลือกยังไม่พร้อมจัดตาราง",
+        errors: readiness.errors,
+        warnings: readiness.warnings,
+      };
+    }
+
+    return {
+      status: "success",
+      groups: buildGaWardGroups(gaInput),
+      wardCount: gaInput.wards.length,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "ไม่สามารถวิเคราะห์กลุ่มวอร์ดได้",
     };
   }
 }
@@ -211,6 +337,7 @@ export async function cancelActiveGaRunAction(
         },
         select: {
           id: true,
+          batchId: true,
           settingsSnapshot: true,
         },
       });
@@ -245,6 +372,26 @@ export async function cancelActiveGaRunAction(
               },
             } as Prisma.InputJsonValue,
           },
+        });
+      }
+
+      const batchIds = Array.from(
+        new Set(activeRuns.map((run) => run.batchId).filter((id): id is string => Boolean(id))),
+      );
+      if (batchIds.length > 0) {
+        await tx.gaRunBatch.updateMany({
+          where: { id: { in: batchIds } },
+          data: {
+            status: "failed",
+            failedGroupCount: activeRuns.length,
+            finishedAt: new Date(),
+          },
+        });
+        await tx.scheduleVersion.updateMany({
+          where: {
+            gaBatch: { id: { in: batchIds } },
+          },
+          data: { status: "failed" },
         });
       }
 
@@ -288,6 +435,94 @@ export async function cancelActiveGaRunAction(
   }
 }
 
+export async function retryFailedGaGroupAction(gaRunId: string) {
+  const session = await getCurrentSession();
+  if (!session?.roles.includes("admin")) {
+    return { status: "error" as const, message: "บัญชีนี้ไม่มีสิทธิ์รันงาน GA ซ้ำ" };
+  }
+
+  const parsedGaRunId = retryGaRunSchema.safeParse(gaRunId);
+  if (!parsedGaRunId.success) {
+    return {
+      status: "error" as const,
+      message: parsedGaRunId.error.issues[0]?.message ?? "งาน GA ไม่ถูกต้อง",
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const run = await tx.gaRun.findUnique({
+        where: { id: parsedGaRunId.data },
+        select: {
+          id: true,
+          cycleId: true,
+          batchId: true,
+          status: true,
+          settingsSnapshot: true,
+        },
+      });
+      if (!run?.batchId || run.status !== "failed") {
+        throw new Error("งานนี้ไม่ใช่กลุ่มที่ล้มเหลวและพร้อมรันซ้ำ");
+      }
+
+      const settings =
+        run.settingsSnapshot &&
+        typeof run.settingsSnapshot === "object" &&
+        !Array.isArray(run.settingsSnapshot)
+          ? { ...run.settingsSnapshot }
+          : {};
+      delete settings.worker_error;
+      delete settings.worker_result;
+      delete settings.worker_score_debug;
+
+      await tx.gaRun.update({
+        where: { id: run.id },
+        data: {
+          status: "queued",
+          generationCount: null,
+          objective: null,
+          fitness: null,
+          startedAt: null,
+          finishedAt: null,
+          settingsSnapshot: settings as Prisma.InputJsonValue,
+        },
+      });
+      const failedGroupCount = await tx.gaRun.count({
+        where: { batchId: run.batchId, status: "failed" },
+      });
+      const batch = await tx.gaRunBatch.update({
+        where: { id: run.batchId },
+        data: {
+          status: "queued",
+          failedGroupCount,
+          hardScore: null,
+          softScore: null,
+          objective: null,
+          fitness: null,
+          finishedAt: null,
+        },
+        select: { scheduleVersionId: true },
+      });
+      await tx.scheduleVersion.update({
+        where: { id: batch.scheduleVersionId },
+        data: { status: "generating" },
+      });
+      await tx.scheduleCycle.update({
+        where: { id: run.cycleId },
+        data: { status: "generating" },
+      });
+    });
+
+    revalidateGaRunPaths();
+    return { status: "success" as const, message: "ส่งกลุ่มที่ล้มเหลวกลับไปรอ GA แล้ว" };
+  } catch (error) {
+    return {
+      status: "error" as const,
+      message: error instanceof Error ? error.message : "ไม่สามารถรันกลุ่มนี้ซ้ำได้",
+    };
+  }
+}
+
 function normalizeTargetWardIds(value: string[] | null | undefined) {
   if (!value) {
     return null;
@@ -300,44 +535,6 @@ function normalizeTargetWardIds(value: string[] | null | undefined) {
   }
 
   return wardIds;
-}
-
-function filterGaInputByWards(input: GaInput, targetWardIds: string[]): GaInput {
-  const selectedWardIdSet = new Set(targetWardIds);
-  const wards = input.wards.filter((item) => selectedWardIdSet.has(item.id));
-
-  if (wards.length !== targetWardIds.length) {
-    throw new Error("มีวอร์ดที่เลือกบางรายการไม่อยู่ในรอบจัดตาราง");
-  }
-
-  const wardStaffCodes = new Set(
-    wards.flatMap((ward) => ward.staff.map((staff) => staff.code)),
-  );
-  const filteredWithoutValidation = {
-    ...input,
-    department: wards.map((ward) => ward.code).join(", "),
-    wards,
-    staff: input.staff.filter((staff) => wardStaffCodes.has(staff.id)),
-    coverage: {
-      ...input.coverage,
-      default: {
-        ...Object.fromEntries(
-          wards.map((ward) => [ward.code, input.coverage.default[ward.code]]),
-        ),
-      },
-    },
-    availabilityRequests: input.availabilityRequests.filter((request) =>
-      wardStaffCodes.has(request.staffCode),
-    ),
-    preferredShiftRequests: input.preferredShiftRequests.filter((request) =>
-      wardStaffCodes.has(request.staffCode),
-    ),
-  };
-
-  return {
-    ...filteredWithoutValidation,
-    validation: validateGaInput(filteredWithoutValidation),
-  };
 }
 
 function buildSettingsSnapshot(
@@ -363,7 +560,6 @@ function buildSettingsSnapshot(
     targetWardCodes,
     ga: gaInput.ga,
     rules: gaInput.rules,
-    baseRuleSettings: gaInput.base_rule_settings,
     traineeRule: gaInput.trainee_rule,
     ruleEngine: gaInput.rule_engine,
     penalties: gaInput.penalties,

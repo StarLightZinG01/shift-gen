@@ -103,11 +103,13 @@ export function ManualScheduleWardList({ data }: ManualScheduleWardListProps) {
 
         <div className="overflow-hidden rounded-xl border">
           <div className="overflow-x-auto">
-          <Table className="min-w-[980px]">
+          <Table className="min-w-[1240px]">
             <TableHeader>
               <TableRow className="bg-[#F4FBFA] hover:bg-[#F4FBFA]">
                 <TableHead className="min-w-28">วอร์ด</TableHead>
                 <TableHead className="min-w-40">ชื่อวอร์ด</TableHead>
+                <TableHead className="min-w-36">Hard Constraint</TableHead>
+                <TableHead className="min-w-36">Soft Constraint</TableHead>
                 <TableHead className="min-w-36">Objective</TableHead>
                 <TableHead className="min-w-32">Fitness</TableHead>
                 <TableHead className="min-w-44">วันที่จัดตาราง</TableHead>
@@ -122,6 +124,12 @@ export function ManualScheduleWardList({ data }: ManualScheduleWardListProps) {
                     {ward.code}
                   </TableCell>
                   <TableCell>{ward.name}</TableCell>
+                  <TableCell>
+                    <ScoreText value={ward.hardScore} />
+                  </TableCell>
+                  <TableCell>
+                    <ScoreText value={ward.softScore} />
+                  </TableCell>
                   <TableCell>
                     <ScoreText value={ward.objective} />
                   </TableCell>
@@ -149,7 +157,7 @@ export function ManualScheduleWardList({ data }: ManualScheduleWardListProps) {
               {paginatedWards.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={9}
                     className="h-24 text-center text-sm text-muted-foreground"
                   >
                     ไม่พบวอร์ดที่ตรงกับคำค้นหา

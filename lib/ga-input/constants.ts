@@ -1,0 +1,1 @@
+export const MAX_CONSECUTIVE_NIGHTS = 2;

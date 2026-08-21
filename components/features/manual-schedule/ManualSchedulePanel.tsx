@@ -1302,6 +1302,10 @@ function GaScoreCard({
   score,
 }: {
   score: {
+    scoringMethod: string | null;
+    hardScore: string | null;
+    softScore: string | null;
+    isFeasible: boolean | null;
     objective: string | null;
     fitness: string | null;
     sourceLabel: string;
@@ -1317,7 +1321,9 @@ function GaScoreCard({
           </p>
         </div>
 
-        <div className="grid w-full gap-3 sm:grid-cols-2 md:w-auto">
+        <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-4 md:w-auto">
+          <GaScoreMetric label="Hard Constraint" value={score?.hardScore ?? "-"} />
+          <GaScoreMetric label="Soft Constraint" value={score?.softScore ?? "-"} />
           <GaScoreMetric label="Objective" value={score?.objective ?? "-"} />
           <GaScoreMetric label="Fitness" value={score?.fitness ?? "-"} />
         </div>
@@ -1332,7 +1338,11 @@ function GaScoreCard({
             className="mt-0.5 shrink-0"
           />
           <span>
-            ถ้ามีการแก้ไขแบบ manual ระบบจะแสดงคะแนน GA เดิมและไม่คำนวณคะแนนใหม่
+            {score?.scoringMethod === "constraint_domination_v1"
+              ? `สถานะจาก GA: ${score.isFeasible ? "ไม่ผิด Hard Constraint" : "ยังผิด Hard Constraint"} · `
+              : "ผลเก่าอาจยังไม่มี Hard/Soft Score · "}
+            Objective = Hard Constraint + Soft Constraint · ถ้ามีการแก้ไขแบบ manual
+            ระบบจะแสดงคะแนน GA เดิมและไม่คำนวณคะแนนใหม่
           </span>
         </p>
       </div>

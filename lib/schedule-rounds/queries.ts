@@ -317,6 +317,9 @@ export async function getScheduleRoundsData(): Promise<ScheduleRoundsData> {
           },
         },
         gaRuns: {
+          where: {
+            batchId: null,
+          },
           select: {
             id: true,
             status: true,
@@ -326,6 +329,35 @@ export async function getScheduleRoundsData(): Promise<ScheduleRoundsData> {
             createdAt: true,
             startedAt: true,
             finishedAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+        gaRunBatches: {
+          select: {
+            id: true,
+            status: true,
+            objective: true,
+            fitness: true,
+            createdAt: true,
+            startedAt: true,
+            finishedAt: true,
+            groupCount: true,
+            completedGroupCount: true,
+            failedGroupCount: true,
+            runs: {
+              select: {
+                id: true,
+                status: true,
+                groupIndex: true,
+                settingsSnapshot: true,
+              },
+              orderBy: {
+                groupIndex: "asc",
+              },
+            },
           },
           orderBy: {
             createdAt: "desc",
@@ -386,6 +418,24 @@ function mapScheduleRoundRow(
       startedAt: Date | null;
       finishedAt: Date | null;
     }>;
+    gaRunBatches: Array<{
+      id: string;
+      status: string;
+      objective: unknown;
+      fitness: unknown;
+      createdAt: Date;
+      startedAt: Date | null;
+      finishedAt: Date | null;
+      groupCount: number;
+      completedGroupCount: number;
+      failedGroupCount: number;
+      runs: Array<{
+        id: string;
+        status: string;
+        groupIndex: number | null;
+        settingsSnapshot: unknown;
+      }>;
+    }>;
   },
   totalWards: number,
   holidays: Array<{ date: Date; label: string | null }>,
@@ -393,7 +443,17 @@ function mapScheduleRoundRow(
   const submittedWards = round.preparations.filter((preparation) =>
     ["submitted", "ready"].includes(preparation.status),
   ).length;
-  const latestGaRun = round.gaRuns[0] ? mapGaRunSummary(round.gaRuns[0]) : null;
+  const latestBatch = round.gaRunBatches[0] ?? null;
+  const latestChildRun = round.gaRuns[0] ?? null;
+  const latestRecord =
+    latestBatch &&
+    (!latestChildRun || latestBatch.createdAt >= latestChildRun.createdAt)
+      ? {
+          ...latestBatch,
+          generationCount: null,
+        }
+      : latestChildRun;
+  const latestGaRun = latestRecord ? mapGaRunSummary(latestRecord) : null;
 
   return {
     id: round.id,
@@ -416,6 +476,19 @@ function mapScheduleRoundRow(
     autoGenerateAtLabel: formatDateTimeLabel(round.autoGenerateAt),
     createdAtLabel: formatDateTimeLabel(round.createdAt),
     latestGaRun,
+    latestGaBatch: latestBatch
+      ? {
+          groupCount: latestBatch.groupCount,
+          completedGroupCount: latestBatch.completedGroupCount,
+          failedGroupCount: latestBatch.failedGroupCount,
+          groups: latestBatch.runs.map((run, index) => ({
+            id: run.id,
+            index: run.groupIndex ?? index + 1,
+            status: run.status,
+            wardCodes: readGroupWardCodes(run.settingsSnapshot),
+          })),
+        }
+      : null,
     hasActiveGaRun: latestGaRun ? isActiveGaRunStatus(latestGaRun.status) : false,
     wardOptions: round.preparations.map((preparation) => {
       const status = normalizePreparationStatus(preparation.status);
@@ -429,6 +502,21 @@ function mapScheduleRoundRow(
       };
     }),
   };
+}
+
+function readGroupWardCodes(settingsSnapshot: unknown) {
+  if (
+    !settingsSnapshot ||
+    typeof settingsSnapshot !== "object" ||
+    Array.isArray(settingsSnapshot)
+  ) {
+    return [];
+  }
+
+  const wardCodes = (settingsSnapshot as Record<string, unknown>).groupWardCodes;
+  return Array.isArray(wardCodes)
+    ? wardCodes.filter((code): code is string => typeof code === "string")
+    : [];
 }
 
 type ScheduleRoundHolidayRow = {

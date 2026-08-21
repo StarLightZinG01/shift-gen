@@ -30,7 +30,6 @@ export function buildWardCompensationSummary(
   for (const row of rows) {
     const position = normalizePayPosition(row.payPosition);
     const rates = resolveCompensationRates({
-      payPosition: position,
       otRate: row.otRate,
       shiftPayRate: row.shiftPayRate,
     });

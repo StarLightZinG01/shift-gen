@@ -75,6 +75,17 @@ export type ScheduleRoundRow = {
   autoGenerateAtLabel: string;
   createdAtLabel: string;
   latestGaRun: GaRunSummary | null;
+  latestGaBatch: {
+    groupCount: number;
+    completedGroupCount: number;
+    failedGroupCount: number;
+    groups: Array<{
+      id: string;
+      index: number;
+      status: string;
+      wardCodes: string[];
+    }>;
+  } | null;
   hasActiveGaRun: boolean;
   wardOptions: ScheduleRoundWardOption[];
 };
@@ -187,9 +198,6 @@ export type GaSettingsData = {
   maxConsecutiveWorkDays: number;
   maxTraineePerShift: number;
   minRestHours: number;
-  workloadBalanceMaxDiff: number;
-  shiftCountBalanceMaxDiff: number;
-  shiftTypeBalanceMaxDiff: number;
   targetOffDaysPerStaff: number | null;
   enableMorningEveningDouble: boolean;
   enableNightEveningDouble: boolean;

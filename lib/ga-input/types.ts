@@ -19,21 +19,12 @@ export type GaInput = {
   monthInfo: GaMonthInfo;
   availabilityRequests: GaAvailabilityRequestInput[];
   preferredShiftRequests: GaPreferredShiftRequestInput[];
-  compensationRates: Record<string, GaCompensationRate>;
-  base_rule_settings: GaBaseRuleSettings;
   rules: GaRulesInput;
   trainee_rule: GaTraineeRuleInput;
   rule_engine: GaRuleEngineInput;
   penalties: GaPenaltiesInput;
   ga: GaSettingsInput;
   custom_rules: unknown[];
-  default_rules_note: Array<{
-    key: string;
-    label: string;
-    level: "hard" | "soft";
-    status: string;
-    enabled: boolean;
-  }>;
   validation: GaInputValidation;
 };
 
@@ -126,11 +117,6 @@ export type GaPreferredShiftRequestInput = {
   reason: string | null;
 };
 
-export type GaCompensationRate = {
-  otRate: number;
-  shiftPayRate: number;
-};
-
 export type GaMonthInfo = {
   days: number;
   dates: Array<{
@@ -143,27 +129,12 @@ export type GaMonthInfo = {
   }>;
 };
 
-export type GaBaseRuleSettings = {
-  coverage: boolean;
-  oneShiftPerDay: boolean;
-  weeklyMinDaysOff: boolean;
-  weeklyMaxShifts: boolean;
-  maxConsecutiveNights: boolean;
-  maxConsecutiveWorkDays: boolean;
-  traineePerShift: boolean;
-  eveningToNight: boolean;
-  doubleShiftConsecutive: boolean;
-  workloadBalance: boolean;
-  doubleShiftBalance: boolean;
-};
-
 export type GaRulesInput = {
   one_shift_per_day: boolean;
   allow_double_shift_codes: string[];
   double_shift_pair: string[][];
   double_shift_required_per_7_days: number;
   double_shift_target_per_month: number;
-  weekly_min_days_off: number;
   max_consecutive_nights: number;
   monthly_quota_mode: string;
   min_rest_hours: number;
@@ -174,7 +145,6 @@ export type GaRulesInput = {
   shift_type_balance_weight: number;
   max_double_per_pair_per_7_days: Record<string, number>;
   regular_shift_quota_per_staff: number | null;
-  max_ot_per_staff: number | null;
   prefer_morning_ot: boolean;
   morning_regular_required: boolean;
   target_off_days_per_staff: number | null;
@@ -192,9 +162,6 @@ export type GaRuleEngineInput = {
     forbidden_sequences: string[][];
     max_consecutive: Record<string, number>;
     max_consecutive_work_days: number;
-  };
-  soft: {
-    balance_double_shift: boolean;
   };
 };
 

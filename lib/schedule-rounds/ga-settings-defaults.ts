@@ -1,4 +1,5 @@
 import type { GaSettingsData } from "./types";
+import { MAX_CONSECUTIVE_NIGHTS } from "@/lib/ga-input/constants";
 
 export const defaultGaSettings: GaSettingsData = {
   profileKey: "default",
@@ -17,13 +18,10 @@ export const defaultGaSettings: GaSettingsData = {
   maxSeconds: 600,
   maxShiftsPer7Days: 10,
   weeklyMinDaysOff: 1,
-  maxConsecutiveNights: 3,
+  maxConsecutiveNights: MAX_CONSECUTIVE_NIGHTS,
   maxConsecutiveWorkDays: 7,
   maxTraineePerShift: 1,
   minRestHours: 8,
-  workloadBalanceMaxDiff: 2,
-  shiftCountBalanceMaxDiff: 2,
-  shiftTypeBalanceMaxDiff: 2,
   targetOffDaysPerStaff: null,
   enableMorningEveningDouble: true,
   enableNightEveningDouble: true,

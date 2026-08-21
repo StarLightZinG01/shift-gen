@@ -3,6 +3,7 @@ import {
   getCurrentCycle,
   getExternalStaffCandidates,
   getRequestSummaryRows,
+  getSchedulePreflightContext,
   getStaffingRequirements,
   getStaffRowsForWard,
   getWardContext,
@@ -21,6 +22,9 @@ export default async function ScheduleManagementPage() {
   const requestRows = ward ? await getRequestSummaryRows(cycle.id, ward.id) : [];
   const staffingRequirements =
     ward && cycle.id ? await getStaffingRequirements(cycle.id, ward.id) : null;
+  const preflight = ward
+    ? await getSchedulePreflightContext(cycle.id, ward.id)
+    : null;
 
   return (
     <ScheduleManagementView
@@ -29,6 +33,15 @@ export default async function ScheduleManagementPage() {
       requestRows={requestRows}
       staffRows={staffRows}
       staffingRequirements={staffingRequirements}
+      preflightSettings={preflight?.settings ?? {
+        maxShiftsPer7Days: 10,
+        maxConsecutiveWorkDays: 7,
+        maxTraineePerShift: 1,
+        enableMorningEveningDouble: true,
+        enableNightEveningDouble: true,
+        morningRegularRequired: true,
+      }}
+      sharedStaffUsage={preflight?.sharedStaffUsage ?? []}
       ward={ward}
     />
   );

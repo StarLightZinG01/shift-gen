@@ -6,7 +6,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 
 import { deleteScheduleRoundAction } from "@/app/actions/schedule-rounds";
-import { cancelActiveGaRunAction } from "@/app/actions/ga-runs";
+import {
+  cancelActiveGaRunAction,
+  retryFailedGaGroupAction,
+} from "@/app/actions/ga-runs";
 import { Button } from "@/components/ui/button";
 import { StartGaRunButton } from "@/components/features/schedule-rounds/StartGaRunButton";
 import {
@@ -82,6 +85,18 @@ export function ScheduleRoundsTable({
     });
   }
 
+  function handleRetryGroup(gaRunId: string) {
+    startTransition(async () => {
+      const result = await retryFailedGaGroupAction(gaRunId);
+      if (result.status === "error") {
+        toast.error(result.message);
+        return;
+      }
+      toast.success(result.message);
+      onGaRunStarted();
+    });
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
       <div className="overflow-x-auto">
@@ -131,6 +146,37 @@ export function ScheduleRoundsTable({
                       <p className="text-xs text-muted-foreground">
                         สร้างเมื่อ {round.latestGaRun.createdAtLabel}
                       </p>
+                      {round.latestGaBatch ? (
+                        <details className="text-xs text-muted-foreground">
+                          <summary className="cursor-pointer select-none text-brand">
+                            สำเร็จ {round.latestGaBatch.completedGroupCount}/
+                            {round.latestGaBatch.groupCount} กลุ่ม
+                            {round.latestGaBatch.failedGroupCount > 0
+                              ? ` · ล้มเหลว ${round.latestGaBatch.failedGroupCount}`
+                              : ""}
+                          </summary>
+                          <div className="mt-2 space-y-1.5">
+                            {round.latestGaBatch.groups.map((group) => (
+                              <div key={group.id} className="flex items-center gap-2">
+                                <p className="min-w-0 flex-1">
+                                  กลุ่ม {group.index}: {group.wardCodes.join(", ") || "-"} ·{" "}
+                                  {formatGaGroupStatus(group.status)}
+                                </p>
+                                {group.status === "failed" ? (
+                                  <button
+                                    type="button"
+                                    className="shrink-0 font-medium text-brand hover:underline"
+                                    disabled={isPending}
+                                    onClick={() => handleRetryGroup(group.id)}
+                                  >
+                                    รันซ้ำ
+                                  </button>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
                     </div>
                   ) : (
                     <span className="text-sm text-muted-foreground">ยังไม่มีงาน GA</span>
@@ -190,6 +236,17 @@ export function ScheduleRoundsTable({
       </div>
     </div>
   );
+}
+
+function formatGaGroupStatus(status: string) {
+  const labels: Record<string, string> = {
+    queued: "รอจัดตาราง",
+    running: "กำลังจัดตาราง",
+    processing: "กำลังประมวลผล",
+    completed: "สำเร็จ",
+    failed: "ล้มเหลว",
+  };
+  return labels[status] ?? status;
 }
 
 function ScheduleRoundStatusBadge({

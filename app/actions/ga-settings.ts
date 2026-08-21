@@ -8,6 +8,7 @@ import {
   activateGaSettingsProfile,
   saveGaSettingsData,
 } from "@/lib/schedule-rounds/ga-settings";
+import { MAX_CONSECUTIVE_NIGHTS } from "@/lib/ga-input/constants";
 
 export type SaveGaSettingsResult =
   | {
@@ -39,14 +40,14 @@ const gaSettingsSchema = z.object({
   ),
   maxSeconds: z.coerce.number().int().min(1).max(86400),
   maxShiftsPer7Days: z.coerce.number().int().min(1).max(14),
-  weeklyMinDaysOff: z.coerce.number().int().min(0).max(7),
-  maxConsecutiveNights: z.coerce.number().int().min(1).max(31),
+  weeklyMinDaysOff: z.preprocess(() => 1, z.number().int()).default(1),
+  maxConsecutiveNights: z.preprocess(
+    () => MAX_CONSECUTIVE_NIGHTS,
+    z.number().int(),
+  ),
   maxConsecutiveWorkDays: z.coerce.number().int().min(1).max(31),
   maxTraineePerShift: z.coerce.number().int().min(0).max(20),
   minRestHours: z.coerce.number().int().min(0).max(24),
-  workloadBalanceMaxDiff: z.coerce.number().int().min(0).max(31).optional().default(2),
-  shiftCountBalanceMaxDiff: z.coerce.number().int().min(0).max(31).optional().default(2),
-  shiftTypeBalanceMaxDiff: z.coerce.number().int().min(0).max(31).optional().default(2),
   targetOffDaysPerStaff: z.preprocess(
     () => null,
     z.number().int().min(0).max(31).nullable(),

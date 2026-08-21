@@ -179,6 +179,11 @@ function StaffTableRow({
         <input name={`staff.${row.id}.rowType`} type="hidden" value={row.rowType} />
         <input name={`staff.${row.id}.staffId`} type="hidden" value={row.staffId ?? ""} />
         <input name={`staff.${row.id}.homeWard`} type="hidden" value={row.homeWard} />
+        <input
+          name={`staff.${row.id}.allowedWards`}
+          type="hidden"
+          value={row.allowedWards.join(",")}
+        />
         <input name={`staff.${row.id}.isHead`} type="hidden" value={String(row.isHead)} />
         <input
           name={`staff.${row.id}.isTrainee`}
