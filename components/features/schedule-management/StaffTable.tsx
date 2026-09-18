@@ -6,6 +6,7 @@ import {
   CrownIcon,
   Delete02Icon,
   GraduationCapIcon,
+  Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -28,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatWardLabel } from "@/lib/schedule-management/formatters";
+import { sortStaffRows } from "@/lib/schedule-management/staff-order";
 import type {
   ExternalStaffCandidate,
   StaffRow,
@@ -47,8 +49,21 @@ export function StaffTable({
   ward,
   externalStaffCandidates,
 }: StaffTableProps) {
-  const [staffRows, setStaffRows] = useState(initialStaffRows);
+  const [staffRows, setStaffRows] = useState(() => sortStaffRows(initialStaffRows));
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const normalizedSearch = search.trim().toLocaleLowerCase("th");
+  const visibleStaffIds = new Set(
+    staffRows
+      .filter((row) =>
+        normalizedSearch.length === 0
+          ? true
+          : [row.code, row.fullName].some((value) =>
+              value.toLocaleLowerCase("th").includes(normalizedSearch),
+            ),
+      )
+      .map((row) => row.id),
+  );
 
   function handleRemoveRow(row: StaffRow) {
     setStaffRows((currentRows) =>
@@ -58,48 +73,85 @@ export function StaffTable({
 
   function handleToggleRole(
     rowId: string,
-    role: "isHead" | "isTrainee",
+    role: "isHead" | "isNewNurse",
   ) {
     setStaffRows((currentRows) =>
-      currentRows.map((currentRow) =>
-        currentRow.id === rowId
-          ? {
-              ...currentRow,
-              [role]: !currentRow[role],
-            }
-          : currentRow,
+      sortStaffRows(
+        currentRows.map((currentRow) =>
+          currentRow.id === rowId
+            ? role === "isNewNurse"
+              ? {
+                  ...currentRow,
+                  isNewNurse: !currentRow.isNewNurse,
+                  isTrainee: !currentRow.isNewNurse,
+                }
+              : { ...currentRow, isHead: !currentRow.isHead }
+            : currentRow,
+        ),
+      ),
+    );
+  }
+
+  function handlePayPositionChange(rowId: string, payPosition: string) {
+    setStaffRows((currentRows) =>
+      sortStaffRows(
+        currentRows.map((row) =>
+          row.id === rowId ? { ...row, payPosition } : row,
+        ),
       ),
     );
   }
 
   return (
     <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-      <div className="flex flex-col gap-4 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="font-semibold">3. ข้อมูลบุคลากร</h2>
+          <h2 className="font-semibold">4. ข้อมูลบุคลากร</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {ward
               ? `แสดงข้อมูลบุคลากรในวอร์ด ${formatWardLabel(ward)}`
               : "ยังไม่มีวอร์ดสำหรับใช้แสดงรายชื่อบุคลากร"}
           </p>
         </div>
-        <Button
-          type="button"
-          className="h-9 w-full rounded-md sm:w-auto"
-          disabled={!canManageWard}
-          onClick={() => setDialogOpen(true)}
-        >
-          <HugeiconsIcon icon={Add01Icon} size={17} strokeWidth={2} />
-          เพิ่มบุคลากร
-        </Button>
+        <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+          <div className="relative w-full sm:w-72">
+            <HugeiconsIcon
+              icon={Search01Icon}
+              size={17}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="ค้นหาจากรหัสหรือชื่อ"
+              aria-label="ค้นหาบุคลากรจากรหัสหรือชื่อ"
+              className="h-9 bg-white pl-9"
+            />
+          </div>
+          <Button
+            type="button"
+            className="h-9 w-full rounded-md sm:w-auto"
+            disabled={!canManageWard}
+            onClick={() => setDialogOpen(true)}
+          >
+            <HugeiconsIcon icon={Add01Icon} size={17} strokeWidth={2} />
+            เพิ่มบุคลากร
+          </Button>
+        </div>
       </div>
 
-      <Table>
-        <TableHeader className="bg-[#EAF4F7]">
+      <div className="[&>[data-slot=table-container]]:h-[480px] [&>[data-slot=table-container]]:overflow-auto">
+      <Table className="min-w-[1840px]">
+        <TableHeader className="sticky top-0 z-30 bg-[#EAF4F7]">
           <TableRow className="hover:bg-[#EAF4F7]">
-            <TableHead className="min-w-16 text-center">ลำดับ</TableHead>
-            <TableHead className="min-w-24">รหัส</TableHead>
-            <TableHead className="min-w-52">ชื่อ</TableHead>
+            <TableHead className="sticky left-0 z-40 w-16 min-w-16 bg-[#EAF4F7] text-center">
+              ลำดับ
+            </TableHead>
+            <TableHead className="sticky left-16 z-40 w-52 min-w-52 bg-[#EAF4F7] shadow-[8px_0_12px_-12px_rgba(15,23,42,0.55)]">
+              ชื่อ
+            </TableHead>
+            <TableHead className="min-w-28">รหัส</TableHead>
             <TableHead className="min-w-32">วอร์ดหลัก</TableHead>
             <TableHead className="min-w-44">วอร์ดที่ขึ้นได้</TableHead>
             <TableHead className="min-w-44">ตำแหน่งเบิกจ่าย</TableHead>
@@ -121,10 +173,14 @@ export function StaffTable({
                 key={row.id}
                 index={index}
                 row={row}
+                hidden={!visibleStaffIds.has(row.id)}
                 onRemove={() => handleRemoveRow(row)}
                 onToggleHead={() => handleToggleRole(row.id, "isHead")}
                 onToggleTrainee={() =>
-                  handleToggleRole(row.id, "isTrainee")
+                  handleToggleRole(row.id, "isNewNurse")
+                }
+                onPayPositionChange={(payPosition) =>
+                  handlePayPositionChange(row.id, payPosition)
                 }
               />
             ))
@@ -140,14 +196,25 @@ export function StaffTable({
               </TableCell>
             </TableRow>
           )}
+          {staffRows.length > 0 && visibleStaffIds.size === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={15}
+                className="h-28 text-center text-muted-foreground"
+              >
+                ไม่พบบุคลากรที่ตรงกับคำค้นหา
+              </TableCell>
+            </TableRow>
+          ) : null}
         </TableBody>
       </Table>
+      </div>
 
       <AddStaffDialog
         existingRows={staffRows}
         externalStaffCandidates={externalStaffCandidates}
         onAddStaff={(staffRow) =>
-          setStaffRows((currentRows) => [...currentRows, staffRow])
+          setStaffRows((currentRows) => sortStaffRows([...currentRows, staffRow]))
         }
         onOpenChange={setDialogOpen}
         open={dialogOpen}
@@ -160,21 +227,25 @@ export function StaffTable({
 function StaffTableRow({
   row,
   index,
+  hidden,
   onRemove,
   onToggleHead,
   onToggleTrainee,
+  onPayPositionChange,
 }: {
   row: StaffRow;
   index: number;
+  hidden: boolean;
   onRemove: () => void;
   onToggleHead: () => void;
   onToggleTrainee: () => void;
+  onPayPositionChange: (payPosition: string) => void;
 }) {
   const isExternal = row.rowType === "external";
 
   return (
-    <TableRow className="bg-white">
-      <TableCell className="text-center font-medium text-muted-foreground">
+    <TableRow className={hidden ? "hidden" : "bg-white"}>
+      <TableCell className="sticky left-0 z-20 w-16 min-w-16 bg-white text-center font-medium text-muted-foreground">
         <input name="staffRowKey" type="hidden" value={row.id} />
         <input name={`staff.${row.id}.rowType`} type="hidden" value={row.rowType} />
         <input name={`staff.${row.id}.staffId`} type="hidden" value={row.staffId ?? ""} />
@@ -186,16 +257,26 @@ function StaffTableRow({
         />
         <input name={`staff.${row.id}.isHead`} type="hidden" value={String(row.isHead)} />
         <input
-          name={`staff.${row.id}.isTrainee`}
+          name={`staff.${row.id}.staffCategory`}
           type="hidden"
-          value={String(row.isTrainee)}
+          value={row.staffCategory}
+        />
+        <input
+          name={`staff.${row.id}.isNewNurse`}
+          type="hidden"
+          value={String(row.isNewNurse)}
+        />
+        <input
+          name={`staff.${row.id}.canBeInCharge`}
+          type="hidden"
+          value={String(row.canBeInCharge)}
         />
         {index + 1}
       </TableCell>
-      <TableCell>
+      <TableCell className="sticky left-16 z-20 w-52 min-w-52 bg-white shadow-[8px_0_12px_-12px_rgba(15,23,42,0.55)]">
         <Input
-          name={`staff.${row.id}.code`}
-          defaultValue={row.code}
+          name={`staff.${row.id}.fullName`}
+          defaultValue={row.fullName}
           className="h-8 rounded-md"
           readOnly={isExternal}
           required
@@ -203,8 +284,8 @@ function StaffTableRow({
       </TableCell>
       <TableCell>
         <Input
-          name={`staff.${row.id}.fullName`}
-          defaultValue={row.fullName}
+          name={`staff.${row.id}.code`}
+          defaultValue={row.code}
           className="h-8 rounded-md"
           readOnly={isExternal}
           required
@@ -232,6 +313,7 @@ function StaffTableRow({
         <Input
           name={`staff.${row.id}.payPosition`}
           defaultValue={row.payPosition}
+          onBlur={(event) => onPayPositionChange(event.currentTarget.value)}
           className="h-8 rounded-md"
           readOnly={isExternal}
           required
@@ -271,12 +353,20 @@ function StaffTableRow({
             onToggle={onToggleHead}
           />
           <RoleBadge
-            active={row.isTrainee}
+            active={row.isNewNurse}
             icon={GraduationCapIcon}
-            label="พยาบาลฝึกหัด"
+            label="พยาบาลใหม่"
             tone="trainee"
             onToggle={onToggleTrainee}
           />
+          <span className="rounded-md border bg-[#F8FDFE] px-2 py-1 text-xs font-semibold text-muted-foreground">
+            {row.staffCategory}
+          </span>
+          {row.canBeInCharge ? (
+            <span className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
+              Incharge
+            </span>
+          ) : null}
         </div>
       </TableCell>
       <TableCell>

@@ -175,6 +175,10 @@ export function defaultPenalties(): GaPenaltiesInput {
     hard: {
       coverage_under: 10000,
       coverage_over: 8000,
+      rn_coverage_under: 10000,
+      pn_na_coverage_under: 10000,
+      incharge_missing: 10000,
+      custom_special_rule: 10000,
       one_shift_per_day: 10000,
       invalid_ward_assignment: 10000,
       requested_off_assignment: 20000,

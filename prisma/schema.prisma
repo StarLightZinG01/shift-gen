@@ -8,6 +8,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum StaffCategory {
+  RN
+  PN
+  NA
+  OTHER
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   username     String   @unique
@@ -24,6 +31,7 @@ model User {
   submittedWardPreparations   WardCyclePreparation[]   @relation("WardPreparationSubmittedBy")
   selectedExternalStaff       WardCycleExternalStaff[] @relation("ExternalStaffSelectedBy")
   createdScheduleVersions     ScheduleVersion[]        @relation("ScheduleVersionCreatedBy")
+  createdWardScheduleVersions ScheduleWardVersion[]    @relation("ScheduleWardVersionCreatedBy")
   manualChanges               ScheduleManualChange[]   @relation("ManualChangeChangedBy")
   auditLogs                   AuditLog[]
 
@@ -69,24 +77,28 @@ model Ward {
   assignments           ScheduleAssignment[]
   compensationSummaries WardCompensationSummary[]
   violations            GaViolation[]
+  scheduleVersions      ScheduleWardVersion[]
 
   @@map("wards")
 }
 
 model Staff {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String?  @unique @map("user_id") @db.Uuid
-  staffCode    String   @unique @map("staff_code")
-  fullName     String   @map("full_name")
-  homeWardId   String   @map("home_ward_id") @db.Uuid
-  position     String?
-  payPosition  String?  @map("pay_position")
-  otRate       Decimal  @default(0) @map("ot_rate") @db.Decimal(12, 2)
-  shiftPayRate Decimal  @default(0) @map("shift_pay_rate") @db.Decimal(12, 2)
-  isHead       Boolean  @default(false) @map("is_head")
-  isTrainee    Boolean  @default(false) @map("is_trainee")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String?       @unique @map("user_id") @db.Uuid
+  staffCode     String        @unique @map("staff_code")
+  fullName      String        @map("full_name")
+  homeWardId    String        @map("home_ward_id") @db.Uuid
+  position      String?
+  payPosition   String?       @map("pay_position")
+  staffCategory StaffCategory @default(OTHER) @map("staff_category")
+  otRate        Decimal       @default(0) @map("ot_rate") @db.Decimal(12, 2)
+  shiftPayRate  Decimal       @default(0) @map("shift_pay_rate") @db.Decimal(12, 2)
+  isHead        Boolean       @default(false) @map("is_head")
+  isTrainee     Boolean       @default(false) @map("is_trainee")
+  isNewNurse    Boolean       @default(false) @map("is_new_nurse")
+  canBeInCharge Boolean       @default(false) @map("can_be_in_charge")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
   user                 User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
   homeWard             Ward                     @relation(fields: [homeWardId], references: [id])
@@ -136,6 +148,7 @@ model ScheduleCycle {
   gaRuns               GaRun[]
   gaRunBatches         GaRunBatch[]
   scheduleVersions     ScheduleVersion[]
+  wardScheduleVersions ScheduleWardVersion[]
 
   @@unique([year, month])
   @@map("schedule_cycles")
@@ -168,20 +181,45 @@ model WardCyclePreparation {
   ward                 Ward                  @relation(fields: [wardId], references: [id], onDelete: Cascade)
   submitter            User?                 @relation("WardPreparationSubmittedBy", fields: [submittedBy], references: [id], onDelete: SetNull)
   staffingRequirements StaffingRequirement[]
+  specialRuleSettings   WardSpecialRuleSetting[]
   staffSnapshots       WardStaffSnapshot[]
 
   @@unique([cycleId, wardId])
   @@map("ward_cycle_preparations")
 }
 
-model StaffingRequirement {
+model WardSpecialRuleSetting {
   id          String   @id @default(uuid()) @db.Uuid
   wardCycleId String   @map("ward_cycle_id") @db.Uuid
-  shiftCode   String   @map("shift_code")
-  minStaff    Int      @map("min_staff")
-  maxStaff    Int      @map("max_staff")
+  ruleKey     String   @map("rule_key")
+  enabled     Boolean  @default(false)
+  parameters  Json     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  wardCycle WardCyclePreparation @relation(fields: [wardCycleId], references: [id], onDelete: Cascade)
+
+  @@unique([wardCycleId, ruleKey])
+  @@index([wardCycleId])
+  @@map("ward_special_rule_settings")
+}
+
+model StaffingRequirement {
+  id                       String   @id @default(uuid()) @db.Uuid
+  wardCycleId              String   @map("ward_cycle_id") @db.Uuid
+  shiftCode                String   @map("shift_code")
+  minStaff                 Int      @map("min_staff")
+  maxStaff                 Int      @map("max_staff")
+  rnRequired               Int      @default(0) @map("rn_required")
+  pnNaRequired             Int      @default(0) @map("pn_na_required")
+  requiresIncharge         Boolean  @default(false) @map("requires_incharge")
+  holidayMinStaff          Int      @default(0) @map("holiday_min_staff")
+  holidayMaxStaff          Int      @default(0) @map("holiday_max_staff")
+  holidayRnRequired        Int      @default(0) @map("holiday_rn_required")
+  holidayPnNaRequired      Int      @default(0) @map("holiday_pn_na_required")
+  holidayRequiresIncharge  Boolean  @default(false) @map("holiday_requires_incharge")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   wardCycle WardCyclePreparation @relation(fields: [wardCycleId], references: [id], onDelete: Cascade)
 
@@ -207,20 +245,23 @@ model WardCycleExternalStaff {
 }
 
 model WardStaffSnapshot {
-  id               String   @id @default(uuid()) @db.Uuid
-  wardCycleId      String   @map("ward_cycle_id") @db.Uuid
-  staffId          String?  @map("staff_id") @db.Uuid
-  staffCode        String   @map("staff_code")
-  fullName         String   @map("full_name")
-  homeWardName     String   @map("home_ward_name")
-  allowedWardsText String   @map("allowed_wards_text")
+  id               String        @id @default(uuid()) @db.Uuid
+  wardCycleId      String        @map("ward_cycle_id") @db.Uuid
+  staffId          String?       @map("staff_id") @db.Uuid
+  staffCode        String        @map("staff_code")
+  fullName         String        @map("full_name")
+  homeWardName     String        @map("home_ward_name")
+  allowedWardsText String        @map("allowed_wards_text")
   position         String?
-  payPosition      String?  @map("pay_position")
-  otRate           Decimal  @default(0) @map("ot_rate") @db.Decimal(12, 2)
-  shiftPayRate     Decimal  @default(0) @map("shift_pay_rate") @db.Decimal(12, 2)
-  isHead           Boolean  @default(false) @map("is_head")
-  isTrainee        Boolean  @default(false) @map("is_trainee")
-  createdAt        DateTime @default(now()) @map("created_at")
+  payPosition      String?       @map("pay_position")
+  staffCategory    StaffCategory @default(OTHER) @map("staff_category")
+  otRate           Decimal       @default(0) @map("ot_rate") @db.Decimal(12, 2)
+  shiftPayRate     Decimal       @default(0) @map("shift_pay_rate") @db.Decimal(12, 2)
+  isHead           Boolean       @default(false) @map("is_head")
+  isTrainee        Boolean       @default(false) @map("is_trainee")
+  isNewNurse       Boolean       @default(false) @map("is_new_nurse")
+  canBeInCharge    Boolean       @default(false) @map("can_be_in_charge")
+  createdAt        DateTime      @default(now()) @map("created_at")
 
   wardCycle WardCyclePreparation @relation(fields: [wardCycleId], references: [id], onDelete: Cascade)
   staff     Staff?               @relation(fields: [staffId], references: [id], onDelete: SetNull)
@@ -264,13 +305,13 @@ model GaRun {
   groupIndex       Int?      @map("group_index")
 
   cycle            ScheduleCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  batch            GaRunBatch?        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batch            GaRunBatch?       @relation(fields: [batchId], references: [id], onDelete: Cascade)
   scheduleVersions ScheduleVersion[]
   violations       GaViolation[]
 
+  @@unique([batchId, groupIndex])
   @@index([cycleId, status])
   @@index([batchId, status])
-  @@unique([batchId, groupIndex])
   @@map("ga_runs")
 }
 
@@ -354,10 +395,37 @@ model ScheduleVersion {
   manualChanges         ScheduleManualChange[]
   compensationSummaries WardCompensationSummary[]
   gaBatch               GaRunBatch?
+  wardVersions          ScheduleWardVersion[]
 
   @@unique([cycleId, versionNo])
   @@index([cycleId, status])
   @@map("schedule_versions")
+}
+
+model ScheduleWardVersion {
+  id                  String    @id @default(uuid()) @db.Uuid
+  scheduleVersionId   String    @map("schedule_version_id") @db.Uuid
+  cycleId             String    @map("cycle_id") @db.Uuid
+  wardId              String    @map("ward_id") @db.Uuid
+  parentWardVersionId String?   @map("parent_ward_version_id") @db.Uuid
+  versionNo           Int       @map("version_no")
+  source              String
+  status              String    @default("draft")
+  createdBy           String?   @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  publishedAt         DateTime? @map("published_at")
+
+  scheduleVersion ScheduleVersion       @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
+  cycle           ScheduleCycle         @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  ward            Ward                  @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  parentVersion   ScheduleWardVersion?  @relation("ScheduleWardVersionParent", fields: [parentWardVersionId], references: [id], onDelete: SetNull)
+  childVersions   ScheduleWardVersion[] @relation("ScheduleWardVersionParent")
+  creator         User?                 @relation("ScheduleWardVersionCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([cycleId, wardId, versionNo])
+  @@unique([scheduleVersionId, wardId])
+  @@index([cycleId, wardId, status])
+  @@map("schedule_ward_versions")
 }
 
 model ScheduleAssignment {

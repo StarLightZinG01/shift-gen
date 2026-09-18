@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 import type { ShiftStaffingRequirement } from "./types";
+import type { SpecialRuleSetting } from "./special-rules";
 
 export type SaveScheduleManagementInput = {
   cycleId: string;
@@ -11,7 +12,11 @@ export type SaveScheduleManagementInput = {
     morning: ShiftStaffingRequirement;
     afternoon: ShiftStaffingRequirement;
     night: ShiftStaffingRequirement;
+    holidayMorning: ShiftStaffingRequirement;
+    holidayAfternoon: ShiftStaffingRequirement;
+    holidayNight: ShiftStaffingRequirement;
   };
+  specialRuleSettings: SpecialRuleSetting[];
 };
 
 export type SaveStaffRowInput = {
@@ -26,6 +31,9 @@ export type SaveStaffRowInput = {
   shiftPayRate: number;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: "RN" | "PN" | "NA" | "OTHER";
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
   off: string;
   vacation: string;
   leave: string;
@@ -39,6 +47,7 @@ export async function saveScheduleManagementData({
   userId,
   staffRows,
   staffingRequirements,
+  specialRuleSettings,
 }: SaveScheduleManagementInput) {
   return prisma.$transaction(async (tx) => {
     const cycle = await tx.scheduleCycle.findUnique({
@@ -122,15 +131,18 @@ export async function saveScheduleManagementData({
     });
 
     await Promise.all([
-      upsertStaffingRequirement(tx, preparation.id, "morning", staffingRequirements.morning),
+      upsertStaffingRequirement(tx, preparation.id, "morning", staffingRequirements.morning, staffingRequirements.holidayMorning),
       upsertStaffingRequirement(
         tx,
         preparation.id,
         "afternoon",
         staffingRequirements.afternoon,
+        staffingRequirements.holidayAfternoon,
       ),
-      upsertStaffingRequirement(tx, preparation.id, "night", staffingRequirements.night),
+      upsertStaffingRequirement(tx, preparation.id, "night", staffingRequirements.night, staffingRequirements.holidayNight),
     ]);
+
+    await replaceSpecialRuleSettings(tx, preparation.id, specialRuleSettings);
 
     await replaceWardStaffSnapshots(
       tx,
@@ -149,6 +161,25 @@ export async function saveScheduleManagementData({
   });
 }
 
+async function replaceSpecialRuleSettings(
+  tx: TransactionClient,
+  wardCycleId: string,
+  settings: SpecialRuleSetting[],
+) {
+  await tx.wardSpecialRuleSetting.deleteMany({ where: { wardCycleId } });
+
+  if (settings.length === 0) return;
+
+  await tx.wardSpecialRuleSetting.createMany({
+    data: settings.map((setting) => ({
+      wardCycleId,
+      ruleKey: setting.ruleKey,
+      enabled: setting.enabled,
+      parameters: setting.parameters,
+    })),
+  });
+}
+
 function getPreparationStatus(
   staffRows: SaveStaffRowInput[],
   staffingRequirements: SaveScheduleManagementInput["staffingRequirements"],
@@ -158,7 +189,10 @@ function getPreparationStatus(
   const hasValidStaffing =
     isValidRequirement(staffingRequirements.morning) &&
     isValidRequirement(staffingRequirements.afternoon) &&
-    isValidRequirement(staffingRequirements.night);
+    isValidRequirement(staffingRequirements.night) &&
+    isValidRequirement(staffingRequirements.holidayMorning) &&
+    isValidRequirement(staffingRequirements.holidayAfternoon) &&
+    isValidRequirement(staffingRequirements.holidayNight);
   const hasCompleteStaff = staffRows.every(
     (row) =>
       row.code.trim() &&
@@ -174,7 +208,13 @@ function getPreparationStatus(
 }
 
 function isValidRequirement(requirement: ShiftStaffingRequirement) {
-  return requirement.min >= 0 && requirement.max >= 0 && requirement.min <= requirement.max;
+  const requiredStaff = requirement.rnRequired + requirement.pnNaRequired;
+  return (
+    requirement.rnRequired >= 0 &&
+    requirement.pnNaRequired >= 0 &&
+    requirement.min === requiredStaff &&
+    requirement.max === requiredStaff
+  );
 }
 
 type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -200,7 +240,10 @@ async function updateHomeStaff(
       otRate: row.otRate.toFixed(2),
       shiftPayRate: row.shiftPayRate.toFixed(2),
       isHead: row.isHead,
-      isTrainee: row.isTrainee,
+      staffCategory: row.staffCategory,
+      isTrainee: row.isNewNurse,
+      isNewNurse: row.isNewNurse,
+      canBeInCharge: row.canBeInCharge,
     },
   });
 
@@ -240,7 +283,10 @@ async function createHomeStaff(
         otRate: row.otRate.toFixed(2),
         shiftPayRate: row.shiftPayRate.toFixed(2),
         isHead: row.isHead,
-        isTrainee: row.isTrainee,
+        staffCategory: row.staffCategory,
+        isTrainee: row.isNewNurse,
+        isNewNurse: row.isNewNurse,
+        canBeInCharge: row.canBeInCharge,
       },
     });
 
@@ -257,7 +303,10 @@ async function createHomeStaff(
       otRate: row.otRate.toFixed(2),
       shiftPayRate: row.shiftPayRate.toFixed(2),
       isHead: row.isHead,
-      isTrainee: row.isTrainee,
+      staffCategory: row.staffCategory,
+      isTrainee: row.isNewNurse,
+      isNewNurse: row.isNewNurse,
+      canBeInCharge: row.canBeInCharge,
     },
   });
 
@@ -362,7 +411,10 @@ async function replaceWardStaffSnapshots(
       otRate: row.otRate.toFixed(2),
       shiftPayRate: row.shiftPayRate.toFixed(2),
       isHead: row.isHead,
-      isTrainee: row.isTrainee,
+      staffCategory: row.staffCategory,
+      isTrainee: row.isNewNurse,
+      isNewNurse: row.isNewNurse,
+      canBeInCharge: row.canBeInCharge,
     })),
   });
 }
@@ -570,7 +622,11 @@ async function upsertStaffingRequirement(
   wardCycleId: string,
   shiftCode: string,
   requirement: ShiftStaffingRequirement,
+  holidayRequirement: ShiftStaffingRequirement,
 ) {
+  const requiredStaff = requirement.rnRequired + requirement.pnNaRequired;
+  const holidayRequiredStaff =
+    holidayRequirement.rnRequired + holidayRequirement.pnNaRequired;
   await tx.staffingRequirement.upsert({
     where: {
       wardCycleId_shiftCode: {
@@ -579,14 +635,30 @@ async function upsertStaffingRequirement(
       },
     },
     update: {
-      minStaff: requirement.min,
-      maxStaff: requirement.max,
+      minStaff: requiredStaff,
+      maxStaff: requiredStaff,
+      rnRequired: requirement.rnRequired,
+      pnNaRequired: requirement.pnNaRequired,
+      requiresIncharge: requirement.requiresIncharge,
+      holidayMinStaff: holidayRequiredStaff,
+      holidayMaxStaff: holidayRequiredStaff,
+      holidayRnRequired: holidayRequirement.rnRequired,
+      holidayPnNaRequired: holidayRequirement.pnNaRequired,
+      holidayRequiresIncharge: holidayRequirement.requiresIncharge,
     },
     create: {
       wardCycleId,
       shiftCode,
-      minStaff: requirement.min,
-      maxStaff: requirement.max,
+      minStaff: requiredStaff,
+      maxStaff: requiredStaff,
+      rnRequired: requirement.rnRequired,
+      pnNaRequired: requirement.pnNaRequired,
+      requiresIncharge: requirement.requiresIncharge,
+      holidayMinStaff: holidayRequiredStaff,
+      holidayMaxStaff: holidayRequiredStaff,
+      holidayRnRequired: holidayRequirement.rnRequired,
+      holidayPnNaRequired: holidayRequirement.pnNaRequired,
+      holidayRequiresIncharge: holidayRequirement.requiresIncharge,
     },
   });
 }

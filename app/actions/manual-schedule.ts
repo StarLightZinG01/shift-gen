@@ -6,7 +6,6 @@ import { getCurrentSession } from "@/lib/auth/session";
 import { recalculateAndSaveCompensation } from "@/lib/compensation/save";
 import {
   assertEditableShiftCode,
-  isWorkShift,
   splitShiftCode,
 } from "@/lib/manual-schedule/validation";
 import {
@@ -20,342 +19,163 @@ export type ManualScheduleActionState = {
   versionId?: string;
 };
 
+export type ManualScheduleDraftAssignment = {
+  staffId: string;
+  day: number;
+  shiftCode: string;
+  otShifts?: string | null;
+  reason?: string;
+};
+
 type ManualSession = {
   userId: string;
   roles: string[];
   homeWardId: string | null;
 };
 
-export async function createManualVersionAction(
-  parentVersionId: string,
-): Promise<ManualScheduleActionState> {
-  try {
-    const session = await requireManualEditor();
-    const manualVersion = await createManualVersionFromParent({
-      parentVersionId,
-      createdBy: session.userId,
-    });
-
-    revalidateManualPaths();
-
-    return {
-      ok: true,
-      message: "สร้าง manual version สำเร็จ",
-      versionId: manualVersion.id,
-    };
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
-export async function cancelManualVersionAction(
-  versionId: string,
-): Promise<ManualScheduleActionState> {
-  try {
-    const session = await requireManualEditor();
-    const version = await getEditableScheduleVersion(versionId);
-    const targetVersion = await prisma.scheduleVersion.findUnique({
-      where: {
-        id: version.id,
-      },
-      select: {
-        id: true,
-        cycleId: true,
-        parentVersionId: true,
-      },
-    });
-
-    if (!targetVersion?.parentVersionId) {
-      throw new Error("ไม่พบเวอร์ชันต้นฉบับสำหรับยกเลิกการแก้ไข");
-    }
-
-    if (!session.roles.includes("admin")) {
-      if (!session.homeWardId) {
-        throw new Error("ไม่พบวอร์ดหลักของบัญชีนี้");
-      }
-
-      const editableWard = await prisma.scheduleAssignment.findFirst({
-        where: {
-          scheduleVersionId: targetVersion.id,
-          wardId: session.homeWardId,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!editableWard) {
-        throw new Error("หัวหน้าวอร์ดยกเลิกได้เฉพาะฉบับแก้ไขของวอร์ดตัวเอง");
-      }
-    }
-
-    await prisma.scheduleVersion.delete({
-      where: {
-        id: targetVersion.id,
-      },
-    });
-
-    revalidateManualPaths();
-
-    return {
-      ok: true,
-      message: "ยกเลิกฉบับแก้ไขและกลับไปใช้ตารางต้นฉบับแล้ว",
-      versionId: targetVersion.parentVersionId,
-    };
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
-export async function updateAssignmentShiftAction(params: {
-  assignmentId: string;
-  newShiftCode: string;
-  otShifts?: string | null;
-  reason?: string;
-}): Promise<ManualScheduleActionState> {
-  try {
-    const session = await requireManualEditor();
-    assertEditableShiftCode(params.newShiftCode);
-    const otShifts = normalizeEditableOtShifts(params.newShiftCode, params.otShifts);
-
-    const assignment = await prisma.scheduleAssignment.findUnique({
-      where: {
-        id: params.assignmentId,
-      },
-      include: {
-        scheduleVersion: true,
-      },
-    });
-
-    if (!assignment) {
-      throw new Error("ไม่พบ assignment ที่ต้องการแก้ไข");
-    }
-
-    await assertCanEditWard(session);
-    await getEditableScheduleVersion(assignment.scheduleVersionId);
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.scheduleAssignment.update({
-        where: {
-          id: assignment.id,
-        },
-        data: {
-          shiftCode: params.newShiftCode,
-          isOt: Boolean(otShifts),
-          otShifts,
-          payAmount: 0,
-        },
-      });
-
-      await tx.scheduleManualChange.create({
-        data: {
-          scheduleVersionId: assignment.scheduleVersionId,
-          assignmentId: assignment.id,
-          actionType: isWorkShift(params.newShiftCode)
-            ? "update_shift"
-            : "remove_assignment",
-          oldStaffId: assignment.staffId,
-          newStaffId: assignment.staffId,
-          oldWardId: assignment.wardId,
-          newWardId: assignment.wardId,
-          oldWorkDate: assignment.workDate,
-          newWorkDate: assignment.workDate,
-          oldShiftCode: assignment.shiftCode,
-          newShiftCode: params.newShiftCode,
-          reason: params.reason?.trim() || null,
-          changedBy: session.userId,
-        },
-      });
-
-      return result;
-    });
-
-    await publishEditedVersion(updated.scheduleVersionId);
-    await recalculateAndSaveCompensation(updated.scheduleVersionId);
-    revalidateManualPaths();
-
-    return {
-      ok: true,
-      message: "บันทึกการแก้ไขเวรสำเร็จ",
-      versionId: updated.scheduleVersionId,
-    };
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
-export async function addAssignmentAction(params: {
-  scheduleVersionId: string;
+export async function saveManualScheduleAction(params: {
+  baseVersionId: string;
   wardId: string;
-  staffId: string;
-  day: number;
-  shiftCode: string;
-  otShifts?: string | null;
-  reason?: string;
+  assignments: ManualScheduleDraftAssignment[];
+  publish: boolean;
 }): Promise<ManualScheduleActionState> {
   try {
     const session = await requireManualEditor();
-    assertEditableShiftCode(params.shiftCode);
-    const otShifts = normalizeEditableOtShifts(params.shiftCode, params.otShifts);
-    await assertCanEditWard(session);
-    const version = await getEditableScheduleVersion(params.scheduleVersionId);
+    await assertCanEditWard(session, params.wardId);
 
-    const cycle = await prisma.scheduleCycle.findUnique({
-      where: {
-        id: version.cycleId,
+    const baseVersion = await prisma.scheduleVersion.findUnique({
+      where: { id: params.baseVersionId },
+      include: {
+        cycle: true,
+        wardVersions: true,
       },
     });
 
-    if (!cycle) {
-      throw new Error("ไม่พบรอบจัดตาราง");
+    if (!baseVersion) {
+      throw new Error("ไม่พบตารางเวรต้นฉบับ");
     }
 
-    const workDate = new Date(
-      Date.UTC(normalizeYear(cycle.year), cycle.month - 1, params.day),
+    const daysInMonth = new Date(
+      normalizeYear(baseVersion.cycle.year),
+      baseVersion.cycle.month,
+      0,
+    ).getDate();
+    const normalizedAssignments = normalizeDraftAssignments(
+      params.assignments,
+      daysInMonth,
     );
-    const existing = await prisma.scheduleAssignment.findFirst({
-      where: {
-        scheduleVersionId: params.scheduleVersionId,
-        staffId: params.staffId,
-        wardId: params.wardId,
-        workDate,
-      },
+
+    if (normalizedAssignments.length === 0) {
+      throw new Error("ไม่พบข้อมูลตารางเวรสำหรับบันทึก");
+    }
+
+    const uniqueStaffIds = Array.from(
+      new Set(normalizedAssignments.map((assignment) => assignment.staffId)),
+    );
+    const existingStaffCount = await prisma.staff.count({
+      where: { id: { in: uniqueStaffIds } },
     });
 
-    const assignment = await prisma.$transaction(async (tx) => {
-      const result = existing
-        ? await tx.scheduleAssignment.update({
-            where: {
-              id: existing.id,
-            },
-            data: {
-              wardId: params.wardId,
-              shiftCode: params.shiftCode,
-              isOt: Boolean(otShifts),
-              otShifts,
-              payAmount: 0,
-            },
-          })
-        : await tx.scheduleAssignment.create({
-            data: {
-              scheduleVersionId: params.scheduleVersionId,
-              staffId: params.staffId,
-              wardId: params.wardId,
-              workDate,
-              shiftCode: params.shiftCode,
-              isOt: Boolean(otShifts),
-              otShifts,
-              payAmount: 0,
-              note: "Manual edit",
-            },
+    if (existingStaffCount !== uniqueStaffIds.length) {
+      throw new Error("พบบุคลากรที่ไม่มีอยู่ในระบบ กรุณารีเฟรชหน้าแล้วลองใหม่");
+    }
+
+    const baseWardVersion = baseVersion.wardVersions.find(
+      (item) => item.wardId === params.wardId,
+    );
+    if (!baseWardVersion) {
+      throw new Error("ไม่พบ version ตารางเวรของวอร์ดนี้");
+    }
+
+    const targetVersion =
+      baseWardVersion.source === "manual" &&
+      baseWardVersion.status === "draft" &&
+      baseVersion.wardVersions.length === 1
+        ? baseVersion
+        : await createManualVersionFromParent({
+            parentVersionId: baseVersion.id,
+            wardId: params.wardId,
+            createdBy: session.userId,
           });
 
-      await tx.scheduleManualChange.create({
-        data: {
-          scheduleVersionId: params.scheduleVersionId,
-          assignmentId: result.id,
-          actionType: "add_assignment",
-          newStaffId: params.staffId,
-          newWardId: params.wardId,
-          newWorkDate: workDate,
-          newShiftCode: params.shiftCode,
-          reason: params.reason?.trim() || null,
-          changedBy: session.userId,
+    const previousAssignments = await prisma.scheduleAssignment.findMany({
+      where: {
+        scheduleVersionId: targetVersion.id,
+        wardId: params.wardId,
+      },
+    });
+    const previousByKey = new Map(
+      previousAssignments.map((assignment) => [
+        `${assignment.staffId}:${assignment.workDate.getUTCDate()}`,
+        assignment,
+      ]),
+    );
+    const nextByKey = new Map(
+      normalizedAssignments.map((assignment) => [
+        `${assignment.staffId}:${assignment.day}`,
+        assignment,
+      ]),
+    );
+    const changedAt = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.scheduleAssignment.deleteMany({
+        where: {
+          scheduleVersionId: targetVersion.id,
+          wardId: params.wardId,
         },
       });
 
-      return result;
+      await tx.scheduleAssignment.createMany({
+        data: normalizedAssignments.map((assignment) => ({
+          scheduleVersionId: targetVersion.id,
+          staffId: assignment.staffId,
+          wardId: params.wardId,
+          workDate: new Date(
+            Date.UTC(
+              normalizeYear(baseVersion.cycle.year),
+              baseVersion.cycle.month - 1,
+              assignment.day,
+            ),
+          ),
+          shiftCode: assignment.shiftCode,
+          isOt: Boolean(assignment.otShifts),
+          otShifts: assignment.otShifts,
+          payAmount: 0,
+          note: assignment.reason || null,
+        })),
+      });
+
+      const changeRows = buildManualChangeRows({
+        previousByKey,
+        nextByKey,
+        scheduleVersionId: targetVersion.id,
+        wardId: params.wardId,
+        changedBy: session.userId,
+        changedAt,
+        year: baseVersion.cycle.year,
+        month: baseVersion.cycle.month,
+      });
+
+      if (changeRows.length > 0) {
+        await tx.scheduleManualChange.createMany({ data: changeRows });
+      }
     });
 
-    await publishEditedVersion(params.scheduleVersionId);
-    await recalculateAndSaveCompensation(params.scheduleVersionId);
-    revalidateManualPaths();
+    await recalculateAndSaveCompensation(targetVersion.id);
 
-    return {
-      ok: true,
-      message: "เพิ่มเวรสำเร็จ",
-      versionId: assignment.scheduleVersionId,
-    };
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
-export async function removeAssignmentAction(params: {
-  assignmentId: string;
-  reason?: string;
-}) {
-  return updateAssignmentShiftAction({
-    assignmentId: params.assignmentId,
-    newShiftCode: "0",
-    otShifts: null,
-    reason: params.reason,
-  });
-}
-
-export async function replaceAssignmentStaffAction(params: {
-  assignmentId: string;
-  newStaffId: string;
-  reason?: string;
-}): Promise<ManualScheduleActionState> {
-  try {
-    const session = await requireManualEditor();
-    const assignment = await prisma.scheduleAssignment.findUnique({
-      where: {
-        id: params.assignmentId,
-      },
-      include: {
-        scheduleVersion: true,
-      },
-    });
-
-    if (!assignment) {
-      throw new Error("ไม่พบ assignment ที่ต้องการแก้ไข");
+    if (params.publish) {
+      await publishVersion(targetVersion.id, params.wardId, session.userId);
     }
 
-    await assertCanEditWard(session);
-    await getEditableScheduleVersion(assignment.scheduleVersionId);
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.scheduleAssignment.update({
-        where: {
-          id: assignment.id,
-        },
-        data: {
-          staffId: params.newStaffId,
-          payAmount: 0,
-        },
-      });
-
-      await tx.scheduleManualChange.create({
-        data: {
-          scheduleVersionId: assignment.scheduleVersionId,
-          assignmentId: assignment.id,
-          actionType: "replace_staff",
-          oldStaffId: assignment.staffId,
-          newStaffId: params.newStaffId,
-          oldWardId: assignment.wardId,
-          newWardId: assignment.wardId,
-          oldWorkDate: assignment.workDate,
-          newWorkDate: assignment.workDate,
-          oldShiftCode: assignment.shiftCode,
-          newShiftCode: assignment.shiftCode,
-          reason: params.reason?.trim() || null,
-          changedBy: session.userId,
-        },
-      });
-
-      return result;
-    });
-
-    await publishEditedVersion(updated.scheduleVersionId);
-    await recalculateAndSaveCompensation(updated.scheduleVersionId);
     revalidateManualPaths();
 
     return {
       ok: true,
-      message: "เปลี่ยนบุคลากรสำเร็จ",
-      versionId: updated.scheduleVersionId,
+      message: params.publish
+        ? "บันทึกและเผยแพร่ตารางเวรสำเร็จ"
+        : "บันทึกตารางเวรเป็นฉบับร่างสำเร็จ",
+      versionId: targetVersion.id,
     };
   } catch (error) {
     return actionError(error);
@@ -364,56 +184,19 @@ export async function replaceAssignmentStaffAction(params: {
 
 export async function publishManualVersionAction(
   versionId: string,
+  wardId: string,
 ): Promise<ManualScheduleActionState> {
   try {
     const session = await requireManualEditor();
-    const version = await getEditableScheduleVersion(versionId);
-
-    await prisma.$transaction(async (tx) => {
-      await tx.scheduleVersion.updateMany({
-        where: {
-          cycleId: version.cycleId,
-          status: "published",
-        },
-        data: {
-          status: "draft",
-          publishedAt: null,
-        },
-      });
-      await tx.scheduleVersion.update({
-        where: {
-          id: versionId,
-        },
-        data: {
-          status: "published",
-          publishedAt: new Date(),
-        },
-      });
-      await tx.scheduleCycle.update({
-        where: {
-          id: version.cycleId,
-        },
-        data: {
-          status: "published",
-          publishedAt: new Date(),
-        },
-      });
-      await tx.scheduleManualChange.create({
-        data: {
-          scheduleVersionId: versionId,
-          actionType: "publish_version",
-          reason: "เผยแพร่ manual version",
-          changedBy: session.userId,
-        },
-      });
-    });
+    await assertCanEditWard(session, wardId);
+    await publishVersion(versionId, wardId, session.userId);
 
     await recalculateAndSaveCompensation(versionId);
     revalidateManualPaths();
 
     return {
       ok: true,
-      message: "เผยแพร่ manual version สำเร็จ",
+      message: "ตั้งตารางเวอร์ชันนี้เป็นเวอร์ชันหลักของวอร์ดแล้ว",
       versionId,
     };
   } catch (error) {
@@ -421,8 +204,55 @@ export async function publishManualVersionAction(
   }
 }
 
+async function publishVersion(versionId: string, wardId: string, changedBy: string) {
+  const version = await getEditableScheduleVersion(versionId, wardId);
+
+  if (["generating", "failed"].includes(version.wardVersion.status)) {
+    throw new Error("ตารางเวอร์ชันนี้ยังไม่พร้อมตั้งเป็นเวอร์ชันหลัก");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.scheduleWardVersion.updateMany({
+      where: {
+        cycleId: version.cycleId,
+        wardId,
+        status: "published",
+        NOT: { id: version.wardVersion.id },
+      },
+      data: {
+        status: "draft",
+        publishedAt: null,
+      },
+    });
+    await tx.scheduleWardVersion.update({
+      where: { id: version.wardVersion.id },
+      data: {
+        status: "published",
+        publishedAt: new Date(),
+      },
+    });
+    await tx.scheduleCycle.update({
+      where: { id: version.cycleId },
+      data: {
+        status: "published",
+        publishedAt: new Date(),
+      },
+    });
+    await tx.scheduleManualChange.create({
+      data: {
+        scheduleVersionId: versionId,
+        actionType: "publish_version",
+        newWardId: wardId,
+        reason: "ตั้งเป็นเวอร์ชันหลักของวอร์ด",
+        changedBy,
+      },
+    });
+  });
+}
+
 export async function deleteScheduleVersionAction(
   versionId: string,
+  wardId: string,
 ): Promise<ManualScheduleActionState> {
   try {
     const session = await requireManualEditor();
@@ -431,48 +261,41 @@ export async function deleteScheduleVersionAction(
       throw new Error("ลบตารางเวรได้เฉพาะผู้ดูแลระบบเท่านั้น");
     }
 
-    const version = await prisma.scheduleVersion.findUnique({
+    const wardVersion = await prisma.scheduleWardVersion.findUnique({
       where: {
-        id: versionId,
+        scheduleVersionId_wardId: { scheduleVersionId: versionId, wardId },
       },
-      select: {
-        id: true,
-        cycleId: true,
-        status: true,
-      },
+      include: { scheduleVersion: { select: { id: true, cycleId: true } } },
     });
 
-    if (!version) {
+    if (!wardVersion) {
       throw new Error("ไม่พบตารางเวรที่ต้องการลบ");
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.scheduleVersion.delete({
-        where: {
-          id: version.id,
-        },
+      await tx.scheduleAssignment.deleteMany({
+        where: { scheduleVersionId: versionId, wardId },
       });
+      await tx.wardCompensationSummary.deleteMany({
+        where: { scheduleVersionId: versionId, wardId },
+      });
+      await tx.scheduleWardVersion.delete({ where: { id: wardVersion.id } });
 
-      if (version.status === "published") {
-        const publishedVersion = await tx.scheduleVersion.findFirst({
-          where: {
-            cycleId: version.cycleId,
-            status: "published",
-          },
-          select: {
-            id: true,
-          },
+      const remainingWardVersions = await tx.scheduleWardVersion.count({
+        where: { scheduleVersionId: versionId },
+      });
+      if (remainingWardVersions === 0) {
+        await tx.scheduleVersion.delete({ where: { id: versionId } });
+      }
+
+      if (wardVersion.status === "published") {
+        const publishedWardCount = await tx.scheduleWardVersion.count({
+          where: { cycleId: wardVersion.scheduleVersion.cycleId, status: "published" },
         });
-
-        if (!publishedVersion) {
+        if (publishedWardCount === 0) {
           await tx.scheduleCycle.update({
-            where: {
-              id: version.cycleId,
-            },
-            data: {
-              status: "locked",
-              publishedAt: null,
-            },
+            where: { id: wardVersion.scheduleVersion.cycleId },
+            data: { status: "locked", publishedAt: null },
           });
         }
       }
@@ -507,15 +330,23 @@ async function requireManualEditor(): Promise<ManualSession> {
   };
 }
 
-async function assertCanEditWard(session: ManualSession) {
-  if (session.roles.includes("admin") || session.roles.includes("ward_head")) {
+async function assertCanEditWard(session: ManualSession, wardId?: string) {
+  if (session.roles.includes("admin")) {
+    return;
+  }
+
+  if (
+    session.roles.includes("ward_head") &&
+    session.homeWardId &&
+    wardId === session.homeWardId
+  ) {
     return;
   }
 
   throw new Error("หัวหน้าวอร์ดแก้ไขได้เฉพาะวอร์ดหลักของตัวเอง");
 }
 
-async function getEditableScheduleVersion(versionId: string) {
+async function getEditableScheduleVersion(versionId: string, wardId: string) {
   const version = await prisma.scheduleVersion.findUnique({
     where: {
       id: versionId,
@@ -525,6 +356,11 @@ async function getEditableScheduleVersion(versionId: string) {
       cycleId: true,
       source: true,
       status: true,
+      wardVersions: {
+        where: { wardId },
+        select: { id: true, status: true },
+        take: 1,
+      },
     },
   });
 
@@ -532,47 +368,157 @@ async function getEditableScheduleVersion(versionId: string) {
     throw new Error("ไม่พบ version ตารางเวร");
   }
 
-  return version;
+  const wardVersion = version.wardVersions[0];
+  if (!wardVersion) {
+    throw new Error("ไม่พบ version ตารางเวรของวอร์ดนี้");
+  }
+
+  return { ...version, wardVersion };
 }
 
-async function publishEditedVersion(versionId: string) {
-  const version = await getEditableScheduleVersion(versionId);
+function normalizeDraftAssignments(
+  assignments: ManualScheduleDraftAssignment[],
+  daysInMonth: number,
+) {
+  const normalized = new Map<
+    string,
+    {
+      staffId: string;
+      day: number;
+      shiftCode: string;
+      otShifts: string | null;
+      reason: string | null;
+    }
+  >();
 
-  await prisma.$transaction(async (tx) => {
-    await tx.scheduleVersion.updateMany({
-      where: {
-        cycleId: version.cycleId,
-        status: "published",
-        NOT: {
-          id: versionId,
-        },
-      },
-      data: {
-        status: "draft",
-        publishedAt: null,
-      },
-    });
+  for (const assignment of assignments) {
+    const staffId = assignment.staffId.trim();
+    const day = Number(assignment.day);
+    const shiftCode = assignment.shiftCode.trim();
 
-    await tx.scheduleVersion.update({
-      where: {
-        id: versionId,
-      },
-      data: {
-        status: "published",
-        publishedAt: new Date(),
-      },
-    });
+    if (!staffId) {
+      throw new Error("พบรายการเวรที่ไม่มีรหัสบุคลากร");
+    }
+    if (!Number.isInteger(day) || day < 1 || day > daysInMonth) {
+      throw new Error(`วันที่ ${assignment.day} อยู่นอกช่วงของเดือน`);
+    }
 
-    await tx.scheduleCycle.update({
-      where: {
-        id: version.cycleId,
-      },
-      data: {
-        status: "published",
-        publishedAt: new Date(),
-      },
+    assertEditableShiftCode(shiftCode);
+    const key = `${staffId}:${day}`;
+    if (normalized.has(key)) {
+      throw new Error(`พบบุคลากรซ้ำในวันที่ ${day}`);
+    }
+
+    normalized.set(key, {
+      staffId,
+      day,
+      shiftCode,
+      otShifts: normalizeEditableOtShifts(shiftCode, assignment.otShifts),
+      reason: assignment.reason?.trim() || null,
     });
-  });
+  }
+
+  return Array.from(normalized.values());
+}
+
+function buildManualChangeRows({
+  previousByKey,
+  nextByKey,
+  scheduleVersionId,
+  wardId,
+  changedBy,
+  changedAt,
+  year,
+  month,
+}: {
+  previousByKey: Map<
+    string,
+    {
+      staffId: string;
+      workDate: Date;
+      shiftCode: string;
+      otShifts: string | null;
+    }
+  >;
+  nextByKey: Map<
+    string,
+    {
+      staffId: string;
+      day: number;
+      shiftCode: string;
+      otShifts: string | null;
+      reason: string | null;
+    }
+  >;
+  scheduleVersionId: string;
+  wardId: string;
+  changedBy: string;
+  changedAt: Date;
+  year: number;
+  month: number;
+}) {
+  const keys = new Set([...previousByKey.keys(), ...nextByKey.keys()]);
+  const rows: Array<{
+    scheduleVersionId: string;
+    actionType: string;
+    oldStaffId: string | null;
+    newStaffId: string | null;
+    oldWardId: string | null;
+    newWardId: string | null;
+    oldWorkDate: Date | null;
+    newWorkDate: Date | null;
+    oldShiftCode: string | null;
+    newShiftCode: string | null;
+    reason: string | null;
+    changedBy: string;
+    changedAt: Date;
+  }> = [];
+
+  for (const key of keys) {
+    const previous = previousByKey.get(key);
+    const next = nextByKey.get(key);
+    const previousShift = previous?.shiftCode ?? "0";
+    const nextShift = next?.shiftCode ?? "0";
+    const previousOt = normalizeEditableOtShifts(
+      previousShift,
+      previous?.otShifts,
+    );
+    const nextOt = normalizeEditableOtShifts(nextShift, next?.otShifts);
+
+    if (previousShift === nextShift && previousOt === nextOt) {
+      continue;
+    }
+
+    const day = next?.day ?? previous?.workDate.getUTCDate();
+    if (!day) {
+      continue;
+    }
+    const workDate = new Date(
+      Date.UTC(normalizeYear(year), month - 1, day),
+    );
+
+    rows.push({
+      scheduleVersionId,
+      actionType: !previous
+        ? "add_assignment"
+        : nextShift === "0"
+          ? "remove_assignment"
+          : "update_shift",
+      oldStaffId: previous?.staffId ?? null,
+      newStaffId: next?.staffId ?? previous?.staffId ?? null,
+      oldWardId: previous ? wardId : null,
+      newWardId: next ? wardId : null,
+      oldWorkDate: previous ? previous.workDate : null,
+      newWorkDate: next ? workDate : null,
+      oldShiftCode: previous?.shiftCode ?? null,
+      newShiftCode: next?.shiftCode ?? null,
+      reason: next?.reason ?? null,
+      changedBy,
+      changedAt,
+    });
+  }
+
+  return rows;
 }
 
 function normalizeYear(year: number) {

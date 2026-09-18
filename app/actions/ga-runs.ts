@@ -14,6 +14,7 @@ import {
   type GaWardGroup,
 } from "@/lib/ga-runs/ward-groups";
 import { prisma } from "@/lib/prisma";
+import { resolveScheduledCycleStatus } from "@/lib/schedule-rounds/cycle-status";
 
 export type StartGaRunActionResult =
   | {
@@ -183,6 +184,21 @@ export async function startGaRunAction(
         where: { cycleId: cycle.id },
         _max: { versionNo: true },
       });
+      const latestWardVersions = await tx.scheduleWardVersion.findMany({
+        where: {
+          cycleId: cycle.id,
+          wardId: { in: gaInput.wards.map((ward) => ward.id) },
+        },
+        select: { wardId: true, versionNo: true },
+        orderBy: { versionNo: "desc" },
+      });
+      const nextVersionByWardId = new Map<string, number>();
+
+      for (const wardVersion of latestWardVersions) {
+        if (!nextVersionByWardId.has(wardVersion.wardId)) {
+          nextVersionByWardId.set(wardVersion.wardId, wardVersion.versionNo + 1);
+        }
+      }
       const scheduleVersion = await tx.scheduleVersion.create({
         data: {
           cycleId: cycle.id,
@@ -191,6 +207,16 @@ export async function startGaRunAction(
           status: "generating",
         },
         select: { id: true },
+      });
+      await tx.scheduleWardVersion.createMany({
+        data: gaInput.wards.map((ward) => ({
+          scheduleVersionId: scheduleVersion.id,
+          cycleId: cycle.id,
+          wardId: ward.id,
+          versionNo: nextVersionByWardId.get(ward.id) ?? 1,
+          source: "ga",
+          status: "generating",
+        })),
       });
       const batch = await tx.gaRunBatch.create({
         data: {
@@ -393,17 +419,31 @@ export async function cancelActiveGaRunAction(
           },
           data: { status: "failed" },
         });
+        await tx.scheduleWardVersion.updateMany({
+          where: {
+            scheduleVersion: {
+              gaBatch: { id: { in: batchIds } },
+            },
+          },
+          data: { status: "failed" },
+        });
       }
 
-      await tx.scheduleCycle.updateMany({
-        where: {
-          id: parsedCycleId.data,
-          status: "generating",
-        },
-        data: {
-          status: "locked",
-        },
+      const cycle = await tx.scheduleCycle.findUnique({
+        where: { id: parsedCycleId.data },
+        select: { requestOpenDate: true, dataLockDate: true },
       });
+      if (cycle) {
+        await tx.scheduleCycle.updateMany({
+          where: {
+            id: parsedCycleId.data,
+            status: "generating",
+          },
+          data: {
+            status: resolveScheduledCycleStatus(cycle),
+          },
+        });
+      }
 
       return {
         cancelledCount: activeRuns.length,
@@ -505,6 +545,10 @@ export async function retryFailedGaGroupAction(gaRunId: string) {
       });
       await tx.scheduleVersion.update({
         where: { id: batch.scheduleVersionId },
+        data: { status: "generating" },
+      });
+      await tx.scheduleWardVersion.updateMany({
+        where: { scheduleVersionId: batch.scheduleVersionId, status: "failed" },
         data: { status: "generating" },
       });
       await tx.scheduleCycle.update({

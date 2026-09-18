@@ -2,17 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -30,8 +22,6 @@ type ManualScheduleWardListProps = {
 const pageSize = 8;
 
 export function ManualScheduleWardList({ data }: ManualScheduleWardListProps) {
-  const router = useRouter();
-  const pathname = usePathname();
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
 
@@ -54,39 +44,15 @@ export function ManualScheduleWardList({ data }: ManualScheduleWardListProps) {
     safePage * pageSize,
   );
 
-  function handleVersionChange(versionId: string) {
-    const searchParams = new URLSearchParams();
-    searchParams.set("tab", "manual-schedule");
-    searchParams.set("manualVersionId", versionId);
-    router.push(`${pathname}?${searchParams.toString()}`);
-  }
-
   return (
     <section className="rounded-2xl border bg-white shadow-sm">
-      <div className="flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="border-b px-5 py-4">
         <div>
           <p className="text-sm font-semibold text-brand">แก้ไขตารางเวร</p>
           <h2 className="mt-1 text-xl font-semibold">เลือกวอร์ดที่ต้องการแก้ไข</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             แอดมินสามารถเลือกวอร์ดจากรายการ แล้วเข้าไปแก้ตารางเวรในหน้าเฉพาะได้
           </p>
-        </div>
-        <div className="w-full lg:max-w-sm">
-          <Select
-            value={data.version?.id ?? undefined}
-            onValueChange={handleVersionChange}
-          >
-            <SelectTrigger className="h-10 rounded-md bg-white">
-              <SelectValue placeholder="เลือกเวอร์ชันตารางเวร" />
-            </SelectTrigger>
-            <SelectContent position="popper" className="max-h-80">
-              {data.versionOptions.map((version) => (
-                <SelectItem key={version.id} value={version.id}>
-                  {version.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -145,7 +111,7 @@ export function ManualScheduleWardList({ data }: ManualScheduleWardListProps) {
                   <TableCell className="text-right">
                     <Button asChild size="sm" className="rounded-md">
                       <Link
-                        href={`/home/manual-schedule?manualVersionId=${data.version?.id ?? ""}&manualWardId=${ward.id}`}
+                        href={`/home/manual-schedule?manualWardId=${ward.id}`}
                       >
                         เข้าไปแก้ไข
                       </Link>

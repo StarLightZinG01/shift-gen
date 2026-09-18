@@ -9,6 +9,7 @@ import {
 } from "@/lib/schedule-rounds/ga-settings";
 import { getCompensationSummary } from "@/lib/compensation/queries";
 import { getManualScheduleData } from "@/lib/manual-schedule/queries";
+import { resolveCycleStatus } from "./cycle-status";
 
 import type {
   CompensationSummaryData,
@@ -99,20 +100,7 @@ export async function getScheduleRoundsDashboardData({
         },
       },
     }),
-    prisma.scheduleVersion.count({
-      where: {
-        OR: [
-          {
-            status: "published",
-          },
-          {
-            publishedAt: {
-              not: null,
-            },
-          },
-        ],
-      },
-    }),
+    prisma.scheduleWardVersion.count({ where: { status: "published" } }),
     getUserManagementData(),
     getScheduleRoundsData(),
     getScheduleDataOverview(),
@@ -183,7 +171,9 @@ export async function getScheduleRoundsDashboardData({
       monthLabel: latestCycle
         ? formatScheduleMonthYear(latestCycle.month, latestCycle.year)
         : "ยังไม่มีรอบจัดตาราง",
-      statusLabel: latestCycle ? formatCycleStatus(latestCycle.status) : "-",
+      statusLabel: latestCycle
+        ? formatCycleStatus(resolveCycleStatus(latestCycle))
+        : "-",
       submittedWards,
       totalWards,
     },
@@ -280,8 +270,8 @@ export async function getScheduleDataOverview(): Promise<ScheduleDataOverview> {
       month: cycle.month,
       year: cycle.year,
       monthLabel: formatScheduleMonthYear(cycle.month, cycle.year),
-      status: cycle.status,
-      statusLabel: formatCycleStatus(cycle.status),
+      status: resolveCycleStatus(cycle),
+      statusLabel: formatCycleStatus(resolveCycleStatus(cycle)),
     },
     summary: {
       totalWards: rows.length,
@@ -454,14 +444,15 @@ function mapScheduleRoundRow(
         }
       : latestChildRun;
   const latestGaRun = latestRecord ? mapGaRunSummary(latestRecord) : null;
+  const status = resolveCycleStatus(round);
 
   return {
     id: round.id,
     year: round.year,
     month: round.month,
     monthLabel: formatScheduleMonthYear(round.month, round.year),
-    status: normalizeScheduleRoundStatus(round.status),
-    statusLabel: formatCycleStatus(round.status),
+    status: normalizeScheduleRoundStatus(status),
+    statusLabel: formatCycleStatus(status),
     requestOpenDate: toDateInputValue(round.requestOpenDate),
     requestCloseDate: toDateInputValue(round.requestCloseDate),
     dataLockDate: toDateInputValue(round.dataLockDate),
@@ -618,6 +609,9 @@ async function getUserManagementData(): Promise<UserManagementData> {
         shiftPayRate: user.staff?.shiftPayRate.toString() ?? "0",
         isHead: user.staff?.isHead ?? role === "ward_head",
         isTrainee: user.staff?.isTrainee ?? false,
+        staffCategory: user.staff?.staffCategory ?? "OTHER",
+        isNewNurse: user.staff?.isNewNurse ?? user.staff?.isTrainee ?? false,
+        canBeInCharge: user.staff?.canBeInCharge ?? false,
       };
     }),
     wards: wards.map((ward) => ({

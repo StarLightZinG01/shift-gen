@@ -59,6 +59,7 @@ export type ScheduleVersionOption = {
 
 export type CompensationSummaryData = {
   scheduleVersionId: string | null;
+  selectedVersionOptionId: string | null;
   scheduleVersionLabel: string;
   versionOptions: ScheduleVersionOption[];
   totalOtAmount: number;

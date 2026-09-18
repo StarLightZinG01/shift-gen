@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { getGaSettingsData } from "@/lib/schedule-rounds/ga-settings";
+import {
+  mergeStoredSpecialRuleSettings,
+  SPECIAL_RULE_DEFINITIONS,
+} from "@/lib/schedule-management/special-rules";
 
 import {
   buildMonthInfo,
@@ -17,9 +21,11 @@ import {
 import { MAX_CONSECUTIVE_NIGHTS } from "./constants";
 import type {
   GaAvailabilityRequestInput,
+  GaCustomRuleInput,
   GaInput,
   GaPreferredShiftRequestInput,
   GaStaffInput,
+  GaStaffingComposition,
   GaStaffingRange,
   GaWardInput,
   GaWardStaffInput,
@@ -37,6 +43,9 @@ type StaffRecord = {
   shiftPayRate: unknown;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: "RN" | "PN" | "NA" | "OTHER";
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
   homeWard: {
     id: string;
     code: string;
@@ -69,6 +78,7 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
         include: {
           ward: true,
           staffingRequirements: true,
+          specialRuleSettings: true,
           staffSnapshots: {
             orderBy: {
               staffCode: "asc",
@@ -185,6 +195,23 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       mergeGaStaffAccumulator(gaStaffByCode, staffMember, specialDaysByStaffCode.get(staffMember.code) ?? {});
     }
 
+    const specialRuleSettings = mergeStoredSpecialRuleSettings(
+      preparation.ward.code,
+      preparation.specialRuleSettings,
+    );
+    const customRules: GaCustomRuleInput[] = specialRuleSettings
+      .filter((setting) => setting.enabled)
+      .map((setting) => ({
+        rule_id: `${preparation.ward.code}:${setting.ruleKey}`,
+        rule_key: setting.ruleKey,
+        rule_name:
+          SPECIAL_RULE_DEFINITIONS.find(
+            (definition) => definition.ruleKey === setting.ruleKey,
+          )?.title ?? setting.ruleKey,
+        ward: preparation.ward.code,
+        parameters: setting.parameters,
+      }));
+
     return {
       id: preparation.ward.id,
       code: preparation.ward.code,
@@ -192,7 +219,11 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       preparationId: preparation.id,
       preparationStatus: preparation.status,
       requirements: buildRequirementMap(preparation.staffingRequirements),
+      holidayRequirements: buildRequirementMap(preparation.staffingRequirements, true),
+      composition: buildCompositionMap(preparation.staffingRequirements),
+      holidayComposition: buildCompositionMap(preparation.staffingRequirements, true),
       staff,
+      customRules,
     };
   });
 
@@ -218,6 +249,19 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
     morning_regular_required: true,
   };
   const monthInfo = buildMonthInfo(cycle.year, cycle.month, holidayDays);
+  const nonWorkingDays = monthInfo.dates
+    .filter((date) => date.isWeekend || date.isHoliday)
+    .map((date) => date.day);
+  const coverageFor = (ward: (typeof wards)[number], holiday: boolean) => {
+    const requirements = holiday ? ward.holidayRequirements : ward.requirements;
+    return {
+      "ช": safeStaffingRange(requirements["ช"]),
+      "บ": safeStaffingRange(requirements["บ"]),
+      "ด": safeStaffingRange(requirements["ด"]),
+      ...(enableMorningEveningDouble ? { "ช/บ": { min: 0, max: 2 } } : {}),
+      ...(enableNightEveningDouble ? { "ด/บ": { min: 0, max: 2 } } : {}),
+    };
+  };
 
   const inputWithoutValidation = {
     cycle: {
@@ -247,20 +291,26 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       default: Object.fromEntries(
         wards.map((ward) => [
           ward.code,
-          {
-            "ช": safeStaffingRange(ward.requirements["ช"]),
-            "บ": safeStaffingRange(ward.requirements["บ"]),
-            "ด": safeStaffingRange(ward.requirements["ด"]),
-            ...(enableMorningEveningDouble
-              ? { "ช/บ": { min: 0, max: 2 } }
-              : {}),
-            ...(enableNightEveningDouble
-              ? { "ด/บ": { min: 0, max: 2 } }
-              : {}),
-          },
+          coverageFor(ward, false),
         ]),
       ),
-      by_day: {},
+      by_day: Object.fromEntries(
+        nonWorkingDays.map((day) => [
+          String(day),
+          Object.fromEntries(wards.map((ward) => [ward.code, coverageFor(ward, true)])),
+        ]),
+      ),
+    },
+    staffing_composition: {
+      default: Object.fromEntries(
+        wards.map((ward) => [ward.code, ward.composition]),
+      ),
+      by_day: Object.fromEntries(
+        nonWorkingDays.map((day) => [
+          String(day),
+          Object.fromEntries(wards.map((ward) => [ward.code, ward.holidayComposition])),
+        ]),
+      ),
     },
     holidays: holidayDays,
     monthInfo,
@@ -297,7 +347,7 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       full_repair_every: gaSettings.fullRepairEvery,
       repair_elite_every: gaSettings.repairEliteEvery,
     },
-    custom_rules: [],
+    custom_rules: wards.flatMap((ward) => ward.customRules),
   };
 
   return {
@@ -322,7 +372,14 @@ async function getCycleHolidayDays(cycleId: string) {
 }
 
 function buildRequirementMap(
-  requirements: Array<{ shiftCode: string; minStaff: number; maxStaff: number }>,
+  requirements: Array<{
+    shiftCode: string;
+    rnRequired: number;
+    pnNaRequired: number;
+    holidayRnRequired: number;
+    holidayPnNaRequired: number;
+  }>,
+  holiday = false,
 ): Record<"ช" | "บ" | "ด", GaStaffingRange | null> {
   const result: Record<"ช" | "บ" | "ด", GaStaffingRange | null> = {
     "ช": null,
@@ -337,9 +394,42 @@ function buildRequirementMap(
       continue;
     }
 
+    const requiredStaff = holiday
+      ? requirement.holidayRnRequired + requirement.holidayPnNaRequired
+      : requirement.rnRequired + requirement.pnNaRequired;
+    result[shiftCode] = { min: requiredStaff, max: requiredStaff };
+  }
+
+  return result;
+}
+
+function buildCompositionMap(
+  requirements: Array<{
+    shiftCode: string;
+    rnRequired: number;
+    pnNaRequired: number;
+    requiresIncharge: boolean;
+    holidayRnRequired: number;
+    holidayPnNaRequired: number;
+    holidayRequiresIncharge: boolean;
+  }>,
+  holiday = false,
+): Record<"ช" | "บ" | "ด", GaStaffingComposition> {
+  const empty = (): GaStaffingComposition => ({
+    rn_required: 0,
+    pn_na_required: 0,
+    requires_incharge: false,
+  });
+  const result = { "ช": empty(), "บ": empty(), "ด": empty() };
+
+  for (const requirement of requirements) {
+    const shiftCode = normalizeShiftCode(requirement.shiftCode);
+    if (!shiftCode) continue;
     result[shiftCode] = {
-      min: requirement.minStaff,
-      max: requirement.maxStaff,
+      rn_required: holiday ? requirement.holidayRnRequired : requirement.rnRequired,
+      pn_na_required: holiday ? requirement.holidayPnNaRequired : requirement.pnNaRequired,
+      // Incharge is configured once per ward through custom_rules.
+      requires_incharge: false,
     };
   }
 
@@ -368,6 +458,9 @@ function mapStaffRecordToWardStaff(
     isExternal,
     isHead: staff.isHead,
     isTrainee: staff.isTrainee,
+    staffCategory: staff.staffCategory,
+    isNewNurse: staff.isNewNurse,
+    canBeInCharge: staff.canBeInCharge,
     position: staff.position ?? "",
     payPosition: staff.payPosition ?? staff.position ?? "",
     otRate: toNumber(staff.otRate),
@@ -389,6 +482,9 @@ function mapSnapshotToWardStaff(
     shiftPayRate: unknown;
     isHead: boolean;
     isTrainee: boolean;
+    staffCategory: "RN" | "PN" | "NA" | "OTHER";
+    isNewNurse: boolean;
+    canBeInCharge: boolean;
   },
   staffById: Map<string, StaffRecord>,
   wardByCode: Map<string, { id: string; code: string }>,
@@ -421,6 +517,9 @@ function mapSnapshotToWardStaff(
     isExternal: false,
     isHead: snapshot.isHead,
     isTrainee: snapshot.isTrainee,
+    staffCategory: snapshot.staffCategory,
+    isNewNurse: snapshot.isNewNurse,
+    canBeInCharge: snapshot.canBeInCharge,
     position: snapshot.position ?? "",
     payPosition: snapshot.payPosition ?? snapshot.position ?? "",
     otRate: toNumber(snapshot.otRate),
@@ -463,6 +562,8 @@ function deduplicateWardStaff(staff: GaWardStaffInput[]) {
       isExternal: existing.isExternal || staffMember.isExternal,
       isHead: existing.isHead || staffMember.isHead,
       isTrainee: existing.isTrainee || staffMember.isTrainee,
+      isNewNurse: existing.isNewNurse || staffMember.isNewNurse,
+      canBeInCharge: existing.canBeInCharge || staffMember.canBeInCharge,
     });
   }
 
@@ -492,6 +593,8 @@ function mergeGaStaffAccumulator(
     isExternal: existing.isExternal || staff.isExternal,
     isHead: existing.isHead || staff.isHead,
     isTrainee: existing.isTrainee || staff.isTrainee,
+    isNewNurse: existing.isNewNurse || staff.isNewNurse,
+    canBeInCharge: existing.canBeInCharge || staff.canBeInCharge,
     specialDays: {
       ...existing.specialDays,
       ...specialDays,
@@ -506,7 +609,7 @@ function toGaStaffInput(staff: StaffAccumulator, maxShiftsPer7Days: number): GaS
     home_ward: staff.homeWardName,
     allowed_wards: staff.allowedWardCodes.length > 0 ? staff.allowedWardCodes : [staff.homeWardName],
     role: "nurse",
-    position: staff.isHead ? "Head Nurse" : staff.isTrainee ? "Trainee Nurse" : staff.position || "RN",
+    position: staff.isHead ? "Head Nurse" : staff.isNewNurse ? "New Nurse" : staff.position || staff.staffCategory,
     pay_position: staff.payPosition,
     ot_rate: staff.otRate,
     shift_allowance: {
@@ -514,8 +617,11 @@ function toGaStaffInput(staff: StaffAccumulator, maxShiftsPer7Days: number): GaS
       "บ": staff.shiftPayRate,
       "ด": staff.shiftPayRate,
     },
-    is_trainee: staff.isTrainee,
+    is_trainee: staff.isNewNurse || staff.isTrainee,
     is_head: staff.isHead,
+    staff_category: staff.staffCategory,
+    is_new_nurse: staff.isNewNurse,
+    can_be_in_charge: staff.canBeInCharge,
     max_shifts_per_7_days: maxShiftsPer7Days,
     monthly_quota: staff.regularWorkTarget,
     special_days: staff.specialDays,

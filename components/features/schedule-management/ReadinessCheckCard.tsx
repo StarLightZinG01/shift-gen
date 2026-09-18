@@ -2,22 +2,31 @@
 
 import { useScheduleManagementLiveData } from "@/components/features/schedule-management/ScheduleManagementForm";
 import { buildReadinessChecks } from "@/lib/schedule-management/readiness";
+import type { CycleContext, WardContext } from "@/lib/schedule-management/types";
 
-export function ReadinessCheckCard() {
+export function ReadinessCheckCard({
+  cycle,
+  ward,
+}: {
+  cycle: CycleContext;
+  ward: WardContext | null;
+}) {
   const liveData = useScheduleManagementLiveData();
-  const checks = buildReadinessChecks(liveData);
+  const checks = buildReadinessChecks({ ...liveData, cycle, ward });
 
   return (
-    <section
-      className="h-full rounded-2xl border bg-white p-6 shadow-sm"
-    >
-      <h2 className="font-semibold">5. ตรวจสอบความพร้อมของข้อมูล</h2>
+    <section className="flex h-full max-h-[520px] min-h-0 flex-col rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
+      <h2 className="font-semibold">6. ตรวจสอบความพร้อมของข้อมูล</h2>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 min-h-0 space-y-2 overflow-y-auto pr-1">
         {checks.map((check) => (
           <div
             key={check.id}
-            className="flex items-center gap-3 rounded-xl border border-[#E4EEF1] bg-[#F8FDFE] px-4 py-3"
+            className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${
+              check.status === "passed"
+                ? "border-[#E4EEF1] bg-[#F8FDFE]"
+                : "border-amber-200 bg-amber-50"
+            }`}
           >
             <span
               className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${

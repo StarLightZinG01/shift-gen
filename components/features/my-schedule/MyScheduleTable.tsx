@@ -38,7 +38,7 @@ type MyScheduleTableProps = {
   compensationSummary: MyScheduleWardCompensationSummary;
 };
 
-const workShiftCodes = ["ด", "ช", "บ"] as const;
+const workShiftCodes = ["ช", "บ", "ด"] as const;
 const noteShiftCodes = ["V", "ว", "ล"] as const;
 
 export function MyScheduleTable({
@@ -339,18 +339,20 @@ export function MyScheduleTable({
 type DayMeta = ReturnType<typeof buildDayMeta>;
 type StaffSummary = ReturnType<typeof createEmptySummary>;
 
-function FullScheduleFitTable({
+export function FullScheduleFitTable({
   dayMetas,
   dailyTotals,
   footerSummary,
   rows,
   summaryByStaffId,
+  renderDayCell,
 }: {
   dayMetas: DayMeta[];
   dailyTotals: Record<number, Record<(typeof workShiftCodes)[number], number>>;
   footerSummary: StaffSummary;
-  rows: MyScheduleStaffRow[];
+  rows: Pick<MyScheduleStaffRow, "id" | "staffCode" | "isCurrentUser" | "shiftsByDay" | "otByDay" | "otShiftsByDay">[];
   summaryByStaffId: Map<string, StaffSummary>;
+  renderDayCell?: (staffId: string, day: DayMeta) => ReactNode;
 }) {
   const compactClassName =
     rows.length > 24 ? "text-[8px] 2xl:text-[9px]" : "text-[9px] 2xl:text-[10px]";
@@ -368,7 +370,7 @@ function FullScheduleFitTable({
       : "w-[clamp(2.15rem,2vw,2.85rem)]";
 
   return (
-    <div className="min-h-0 overflow-hidden rounded-lg border border-[#DDEBED] bg-white">
+    <div className="min-h-0 overflow-auto rounded-lg border border-[#DDEBED] bg-white">
       <table
         className={`h-full w-full table-fixed border-collapse leading-tight ${compactClassName}`}
       >
@@ -423,7 +425,7 @@ function FullScheduleFitTable({
                 {weekday}
               </th>
             ))}
-            <th className="border border-[#DDEBED] bg-[#E4F7F5] px-1 py-1 text-brand">ราช</th>
+            <th className="border border-[#DDEBED] bg-[#E4F7F5] px-1 py-1 text-brand">ราชการ</th>
             <th className="border border-[#DDEBED] bg-[#E4F7F5] px-1 py-1 text-brand">จริง</th>
             {workShiftCodes.map((code) => (
               <th key={`full-ot-${code}`} className="border border-[#DDEBED] bg-brand/10 px-1 py-1 text-brand">
@@ -457,6 +459,9 @@ function FullScheduleFitTable({
                   <div className="truncate">{row.staffCode}</div>
                 </td>
                 {dayMetas.map(({ day, isHoliday }) => {
+                  if (renderDayCell) {
+                    return renderDayCell(row.id, dayMetas[day - 1]);
+                  }
                   const shiftCode = row.shiftsByDay[day] ?? "0";
                   const displayValue = formatShiftWithOt(
                     shiftCode,

@@ -38,6 +38,9 @@ export type StaffRow = {
   preferredShifts: string;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: "RN" | "PN" | "NA" | "OTHER";
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
 };
 
 export type ExternalStaffCandidate = {
@@ -51,6 +54,9 @@ export type ExternalStaffCandidate = {
   shiftPayRate: string;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: "RN" | "PN" | "NA" | "OTHER";
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
 };
 
 export type RequestSummaryRow = {
@@ -66,12 +72,18 @@ export type RequestSummaryRow = {
 export type ShiftStaffingRequirement = {
   min: number;
   max: number;
+  rnRequired: number;
+  pnNaRequired: number;
+  requiresIncharge: boolean;
 };
 
 export type StaffingRequirements = {
   night?: ShiftStaffingRequirement;
   morning?: ShiftStaffingRequirement;
   afternoon?: ShiftStaffingRequirement;
+  holidayNight?: ShiftStaffingRequirement;
+  holidayMorning?: ShiftStaffingRequirement;
+  holidayAfternoon?: ShiftStaffingRequirement;
 };
 
 export type PreflightSettings = {

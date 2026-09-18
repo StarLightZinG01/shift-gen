@@ -13,7 +13,11 @@ export type GaInput = {
   shifts: GaShiftInput[];
   coverage: {
     default: Record<string, Record<string, GaStaffingRange>>;
-    by_day: Record<string, unknown>;
+    by_day: Record<string, Record<string, Record<string, GaStaffingRange>>>;
+  };
+  staffing_composition: {
+    default: Record<string, Record<GaShiftCode, GaStaffingComposition>>;
+    by_day: Record<string, Record<string, Record<GaShiftCode, GaStaffingComposition>>>;
   };
   holidays: number[];
   monthInfo: GaMonthInfo;
@@ -24,7 +28,7 @@ export type GaInput = {
   rule_engine: GaRuleEngineInput;
   penalties: GaPenaltiesInput;
   ga: GaSettingsInput;
-  custom_rules: unknown[];
+  custom_rules: GaCustomRuleInput[];
   validation: GaInputValidation;
 };
 
@@ -47,12 +51,36 @@ export type GaWardInput = {
   preparationId: string;
   preparationStatus: string;
   requirements: Record<GaShiftCode, GaStaffingRange | null>;
+  holidayRequirements: Record<GaShiftCode, GaStaffingRange | null>;
+  composition: Record<GaShiftCode, GaStaffingComposition>;
+  holidayComposition: Record<GaShiftCode, GaStaffingComposition>;
   staff: GaWardStaffInput[];
+  customRules: GaCustomRuleInput[];
+};
+
+export type GaCustomRuleInput = {
+  rule_id: string;
+  rule_key:
+    | "incharge_min_per_shift"
+    | "icu_new_not_together"
+    | "sunday_morning_rn_exact"
+    | "morning_rn_by_day"
+    | "weekday_morning_pn_exact"
+    | "pn_na_equal_per_shift";
+  rule_name: string;
+  ward: string;
+  parameters: Record<string, number>;
 };
 
 export type GaStaffingRange = {
   min: number;
   max: number;
+};
+
+export type GaStaffingComposition = {
+  rn_required: number;
+  pn_na_required: number;
+  requires_incharge: boolean;
 };
 
 export type GaWardStaffInput = {
@@ -66,6 +94,9 @@ export type GaWardStaffInput = {
   isExternal: boolean;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: "RN" | "PN" | "NA" | "OTHER";
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
   position: string;
   payPosition: string;
   otRate: number;
@@ -85,6 +116,9 @@ export type GaStaffInput = {
   shift_allowance: Record<GaShiftCode, number>;
   is_trainee: boolean;
   is_head: boolean;
+  staff_category: "RN" | "PN" | "NA" | "OTHER";
+  is_new_nurse: boolean;
+  can_be_in_charge: boolean;
   max_shifts_per_7_days: number;
   monthly_quota: number | null;
   special_days: Record<string, "V" | "ว" | "ล" | "0">;

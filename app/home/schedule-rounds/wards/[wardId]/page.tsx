@@ -8,6 +8,7 @@ import {
   getExternalStaffCandidates,
   getRequestSummaryRows,
   getSchedulePreflightContext,
+  getSpecialRuleSettings,
   getStaffingRequirements,
   getStaffRowsForWard,
   getWardContextById,
@@ -53,6 +54,11 @@ export default async function WardScheduleDataDetailPage({
   const staffingRequirements =
     cycle.id ? await getStaffingRequirements(cycle.id, ward.id) : null;
   const preflight = await getSchedulePreflightContext(cycle.id, ward.id);
+  const specialRuleSettings = await getSpecialRuleSettings(
+    cycle.id,
+    ward.id,
+    ward.code,
+  );
 
   return (
     <div className="space-y-4 pb-8">
@@ -70,6 +76,7 @@ export default async function WardScheduleDataDetailPage({
         staffingRequirements={staffingRequirements}
         preflightSettings={preflight.settings}
         sharedStaffUsage={preflight.sharedStaffUsage}
+        specialRuleSettings={specialRuleSettings}
         ward={ward}
       />
     </div>

@@ -12,7 +12,7 @@ import { OverviewStatsGrid } from "@/components/features/schedule-rounds/Overvie
 import { ScheduleDataPanel } from "@/components/features/schedule-rounds/ScheduleDataPanel";
 import { ScheduleRoundsPanel } from "@/components/features/schedule-rounds/ScheduleRoundsPanel";
 import { UserManagementPanel } from "@/components/features/schedule-rounds/UserManagementPanel";
-import { adminTabs } from "@/lib/schedule-rounds/mock-data";
+import { adminTabs } from "@/lib/schedule-rounds/admin-tabs";
 import type {
   AdminTabId,
   CompensationSummaryData,
@@ -69,9 +69,6 @@ export function ScheduleRoundsView({
     const savedTab = window.localStorage.getItem(ADMIN_TAB_STORAGE_KEY);
     return isAdminTabId(savedTab) ? savedTab : "system-overview";
   });
-  const activeTabLabel =
-    adminTabs.find((tab) => tab.id === activeTab)?.label ?? "ภาพรวมระบบ";
-
   useEffect(() => {
     if (initialActiveTab) {
       window.localStorage.setItem(ADMIN_TAB_STORAGE_KEY, initialActiveTab);
@@ -115,20 +112,7 @@ export function ScheduleRoundsView({
         <ManualScheduleWardList data={manualSchedule} />
       ) : activeTab === "ga-settings" ? (
         <GaSettingsPanel data={gaSettings} profiles={gaSettingsProfiles} />
-      ) : (
-        <PlaceholderContent title={activeTabLabel} />
-      )}
+      ) : null}
     </main>
-  );
-}
-
-function PlaceholderContent({ title }: { title: string }) {
-  return (
-    <section className="rounded-2xl border border-dashed bg-white p-8 text-center shadow-sm">
-      <h2 className="text-xl font-semibold">{title}</h2>
-      <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-        เตรียมพื้นที่ไว้สำหรับต่อยอดข้อมูลจริงและเครื่องมือจัดการในขั้นถัดไป
-      </p>
-    </section>
   );
 }

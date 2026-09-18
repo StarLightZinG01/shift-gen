@@ -8,8 +8,10 @@ import {
   ArrowRight01Icon,
   MoreHorizontalIcon,
   Search01Icon,
+  Upload01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { saveManagedUserAction } from "@/app/actions/schedule-rounds-users";
@@ -66,6 +68,9 @@ const emptyUser: UserManagementRow = {
   shiftPayRate: "0",
   isHead: false,
   isTrainee: false,
+  staffCategory: "OTHER",
+  isNewNurse: false,
+  canBeInCharge: false,
 };
 
 type UserManagementPanelProps = {
@@ -199,14 +204,22 @@ export function UserManagementPanel({ data }: UserManagementPanelProps) {
           </FilterField>
         </div>
 
-        <Button
-          type="button"
-          className="mt-4 h-9 rounded-md"
-          onClick={() => setEditingUser(emptyUser)}
-        >
-          <HugeiconsIcon icon={Add01Icon} size={17} strokeWidth={2} />
-          เพิ่มผู้ใช้
-        </Button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            className="h-9 rounded-md"
+            onClick={() => setEditingUser(emptyUser)}
+          >
+            <HugeiconsIcon icon={Add01Icon} size={17} strokeWidth={2} />
+            เพิ่มผู้ใช้
+          </Button>
+          <Button type="button" variant="outline" className="h-9 rounded-md" asChild>
+            <Link href="/home/personnel-import">
+              <HugeiconsIcon icon={Upload01Icon} size={17} strokeWidth={2} />
+              นำเข้าจาก Excel
+            </Link>
+          </Button>
+        </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
@@ -414,7 +427,9 @@ function UserEditorDialog({
         payPosition: draft.payPosition,
         otRate: draft.otRate,
         shiftPayRate: draft.shiftPayRate,
-        isTrainee: draft.isTrainee,
+        staffCategory: draft.staffCategory,
+        isNewNurse: draft.isNewNurse,
+        canBeInCharge: draft.canBeInCharge,
       });
 
       if (result.status === "error") {
@@ -548,17 +563,48 @@ function UserEditorDialog({
                   />
                 </div>
 
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    checked={draft.isTrainee}
-                    onChange={(event) =>
-                      updateDraft("isTrainee", event.target.checked)
-                    }
-                    className="size-4 accent-[#008585]"
-                  />
-                  เป็นพยาบาลฝึกหัด
-                </label>
+                <SegmentedField
+                  label="ประเภทบุคลากร"
+                  value={draft.staffCategory}
+                  onChange={(value) =>
+                    updateDraft(
+                      "staffCategory",
+                      value as UserManagementRow["staffCategory"],
+                    )
+                  }
+                  options={[
+                    { label: "RN", value: "RN" },
+                    { label: "PN", value: "PN" },
+                    { label: "NA", value: "NA" },
+                    { label: "อื่น ๆ", value: "OTHER" },
+                  ]}
+                />
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={draft.isNewNurse}
+                      onChange={(event) => {
+                        updateDraft("isNewNurse", event.target.checked);
+                        updateDraft("isTrainee", event.target.checked);
+                      }}
+                      className="size-4 accent-[#008585]"
+                    />
+                    เป็นพยาบาลใหม่
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={draft.canBeInCharge}
+                      onChange={(event) =>
+                        updateDraft("canBeInCharge", event.target.checked)
+                      }
+                      className="size-4 accent-[#008585]"
+                    />
+                    สามารถเป็น Incharge
+                  </label>
+                </div>
               </section>
 
               <section className="space-y-3 border-t pt-8">

@@ -45,6 +45,9 @@ const initialDraft: NewStaffDraftInput = {
   shiftPayRate: "",
   isHead: false,
   isTrainee: false,
+  staffCategory: "RN",
+  isNewNurse: false,
+  canBeInCharge: false,
   off: "0",
   vacation: "0",
   leave: "0",
@@ -215,6 +218,24 @@ export function AddStaffDialog({
                     value={draft.payPosition}
                     onChange={(value) => updateDraft("payPosition", value)}
                   />
+                  <div className="space-y-1.5">
+                    <Label>ประเภทบุคลากร</Label>
+                    <select
+                      value={draft.staffCategory}
+                      onChange={(event) =>
+                        updateDraft(
+                          "staffCategory",
+                          event.target.value as NewStaffDraftInput["staffCategory"],
+                        )
+                      }
+                      className="h-9 w-full rounded-md border bg-white px-3 text-sm"
+                    >
+                      <option value="RN">RN</option>
+                      <option value="PN">PN</option>
+                      <option value="NA">NA</option>
+                      <option value="OTHER">อื่น ๆ</option>
+                    </select>
+                  </div>
                   <Field
                     label="ค่า OT"
                     type="number"
@@ -274,9 +295,17 @@ export function AddStaffDialog({
                     onChange={(checked) => updateDraft("isHead", checked)}
                   />
                   <CheckboxField
-                    checked={draft.isTrainee}
-                    label="เป็นพยาบาลฝึกหัด"
-                    onChange={(checked) => updateDraft("isTrainee", checked)}
+                    checked={draft.isNewNurse}
+                    label="เป็นพยาบาลใหม่"
+                    onChange={(checked) => {
+                      updateDraft("isNewNurse", checked);
+                      updateDraft("isTrainee", checked);
+                    }}
+                  />
+                  <CheckboxField
+                    checked={draft.canBeInCharge}
+                    label="สามารถเป็น Incharge"
+                    onChange={(checked) => updateDraft("canBeInCharge", checked)}
                   />
                 </div>
               </FormSection>
@@ -346,9 +375,14 @@ export function AddStaffDialog({
                             <span className="rounded-full bg-[#EEF7F8] px-2.5 py-1">
                               {candidate.payPosition || "ไม่ระบุตำแหน่งเบิกจ่าย"}
                             </span>
-                            {candidate.isTrainee ? (
+                            {candidate.isNewNurse ? (
                               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
-                                พยาบาลฝึกหัด
+                                พยาบาลใหม่
+                              </span>
+                            ) : null}
+                            {candidate.canBeInCharge ? (
+                              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                                Incharge
                               </span>
                             ) : null}
                           </div>

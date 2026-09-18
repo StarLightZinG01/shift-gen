@@ -11,6 +11,7 @@ export type HomeTodayShift = {
   hasSchedule: boolean;
   label: string;
   shiftName: string;
+  shifts: string[];
   ward: string;
   time: string;
   summary: Array<{
@@ -23,7 +24,7 @@ export type HomeUpcomingDay = {
   id: string;
   day: string;
   date: string;
-  shift: string;
+  shifts: string[];
   shiftLabel: string;
   isToday: boolean;
 };

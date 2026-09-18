@@ -12,6 +12,9 @@ export type NewStaffDraftInput = {
   shiftPayRate: string;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: "RN" | "PN" | "NA" | "OTHER";
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
   off: string;
   vacation: string;
   leave: string;
@@ -87,7 +90,10 @@ export function buildNewStaffRow(
     academic: input.academic.trim() || "0",
     preferredShifts: input.preferredShifts.trim() || "0",
     isHead: input.isHead,
-    isTrainee: input.isTrainee,
+    isTrainee: input.isNewNurse,
+    staffCategory: input.staffCategory,
+    isNewNurse: input.isNewNurse,
+    canBeInCharge: input.canBeInCharge,
   };
 }
 
@@ -112,6 +118,9 @@ export function buildExternalStaffRow(
     preferredShifts: "0",
     isHead: candidate.isHead,
     isTrainee: candidate.isTrainee,
+    staffCategory: candidate.staffCategory,
+    isNewNurse: candidate.isNewNurse,
+    canBeInCharge: candidate.canBeInCharge,
   };
 }
 

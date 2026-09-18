@@ -50,13 +50,16 @@ export function MyScheduleView({ data }: MyScheduleViewProps) {
               </Button>
             ) : null}
             <Button
-              type="button"
+              asChild
               variant="outline"
-              disabled
               className="h-10 rounded-md"
             >
-              <HugeiconsIcon icon={Download01Icon} size={18} />
-              ดาวน์โหลด Excel
+              <a
+                href={`/home/my-schedule/export?versionId=${encodeURIComponent(data.selectedVersionId)}`}
+              >
+                <HugeiconsIcon icon={Download01Icon} size={18} />
+                ดาวน์โหลด Excel
+              </a>
             </Button>
           </div>
         </div>

@@ -37,6 +37,19 @@ export function filterGaInputByWardIds(
       default: Object.fromEntries(
         wards.map((ward) => [ward.code, input.coverage.default[ward.code]]),
       ),
+      by_day: filterWardDayMap(input.coverage.by_day, selectedWardCodeSet),
+    },
+    staffing_composition: {
+      default: Object.fromEntries(
+        wards.map((ward) => [
+          ward.code,
+          input.staffing_composition.default[ward.code],
+        ]),
+      ),
+      by_day: filterWardDayMap(
+        input.staffing_composition.by_day,
+        selectedWardCodeSet,
+      ),
     },
     availabilityRequests: input.availabilityRequests.filter((request) =>
       selectedStaffCodes.has(request.staffCode),
@@ -44,10 +57,29 @@ export function filterGaInputByWardIds(
     preferredShiftRequests: input.preferredShiftRequests.filter((request) =>
       selectedStaffCodes.has(request.staffCode),
     ),
+    custom_rules: input.custom_rules.filter((rule) =>
+      selectedWardCodeSet.has(rule.ward),
+    ),
   };
 
   return {
     ...filteredWithoutValidation,
     validation: validateGaInput(filteredWithoutValidation),
   };
+}
+
+function filterWardDayMap<T>(
+  byDay: Record<string, Record<string, T>>,
+  selectedWardCodes: Set<string>,
+) {
+  return Object.fromEntries(
+    Object.entries(byDay).map(([day, wardMap]) => [
+      day,
+      Object.fromEntries(
+        Object.entries(wardMap).filter(([wardCode]) =>
+          selectedWardCodes.has(wardCode),
+        ),
+      ),
+    ]),
+  );
 }

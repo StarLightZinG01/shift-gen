@@ -1,28 +1,51 @@
+export type ImportedStaffCategory = "RN" | "PN" | "NA" | "OTHER";
+
 export type StaffImportRow = {
   rowNumber: number;
   staffCode: string;
+  generatedStaffCode: boolean;
   fullName: string;
   homeWard: string;
-  role?: string;
-  position?: string;
-  payPosition?: string;
+  position: string;
+  payPosition: string;
+  staffCategory: ImportedStaffCategory;
   otRate: number;
   shiftPayRate: number;
   isHead: boolean;
-  isTrainee: boolean;
-  allowedWards: string[];
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
 };
 
-export type ImportRowError = {
+export type ImportRowIssue = {
   rowNumber: number;
   staffCode?: string;
   message: string;
 };
 
 export type ParsedStaffImport = {
+  sheetName: string;
   rows: StaffImportRow[];
-  errors: ImportRowError[];
+  errors: ImportRowIssue[];
+  warnings: ImportRowIssue[];
   totalRows: number;
+};
+
+export type PersonnelImportPreview = {
+  fileName: string;
+  sheetName: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  generatedCodeCount: number;
+  wardCount: number;
+  headCount: number;
+  newNurseCount: number;
+  inChargeCount: number;
+  categoryCounts: Record<ImportedStaffCategory, number>;
+  wardCounts: Array<{ ward: string; count: number }>;
+  sampleRows: StaffImportRow[];
+  errors: ImportRowIssue[];
+  warnings: ImportRowIssue[];
 };
 
 export type ImportStaffUsersOptions = {
@@ -38,5 +61,5 @@ export type ImportStaffUsersSummary = {
   createdStaff: number;
   updatedStaff: number;
   createdWards: number;
-  errors: ImportRowError[];
+  errors: ImportRowIssue[];
 };

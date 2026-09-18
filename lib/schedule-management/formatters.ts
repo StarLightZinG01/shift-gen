@@ -55,7 +55,7 @@ export function formatHolidayList(
 
 export function formatDateRange(start: Date | null, end: Date | null) {
   if (!start || !end) {
-    return "วันที่ 1-20 (mock)";
+    return "ยังไม่ได้กำหนดช่วงเวลารับคำขอ";
   }
 
   return `${formatThaiDay(start)}-${formatThaiDay(end)}`;
@@ -63,7 +63,7 @@ export function formatDateRange(start: Date | null, end: Date | null) {
 
 export function formatDateTime(date: Date | null) {
   if (!date) {
-    return "วันที่ 26 เวลา 00.00 น. (mock)";
+    return "ยังไม่ได้กำหนดวันเริ่มจัดตาราง";
   }
 
   return `${formatThaiDay(date)} เวลา ${formatThaiTime(date)} น.`;

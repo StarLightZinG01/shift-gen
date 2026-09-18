@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { resolveCycleStatus } from "@/lib/schedule-rounds/cycle-status";
 import type { SessionPayload } from "@/lib/auth/session";
 import { splitShiftCode } from "@/lib/manual-schedule/validation";
 
@@ -68,20 +69,7 @@ async function getAdminHomeDashboardData(
         },
       },
     }),
-    prisma.scheduleVersion.count({
-      where: {
-        OR: [
-          {
-            status: "published",
-          },
-          {
-            publishedAt: {
-              not: null,
-            },
-          },
-        ],
-      },
-    }),
+    prisma.scheduleWardVersion.count({ where: { status: "published" } }),
   ]);
 
   const submittedWards =
@@ -121,7 +109,7 @@ async function getAdminHomeDashboardData(
     latestCycle: latestCycle
       ? {
           monthLabel: formatMonthYear(latestCycle.month, latestCycle.year),
-          statusLabel: formatCycleStatus(latestCycle.status),
+          statusLabel: formatCycleStatus(resolveCycleStatus(latestCycle)),
           submittedWards,
           totalWards,
         }
@@ -159,52 +147,26 @@ async function getUserHomeDashboardData(
     : null;
 
   const today = startOfDay(new Date());
-  const [staffVersions, wardVersions] = staff
-    ? await Promise.all([
-        prisma.scheduleVersion.findMany({
-          where: {
-            status: {
-              in: [...visibleScheduleStatuses],
-            },
-            assignments: {
-              some: {
-                staffId: staff.id,
-              },
-            },
-          },
-          include: {
-            cycle: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 12,
-        }),
-        prisma.scheduleVersion.findMany({
-          where: {
-            status: {
-              in: [...visibleScheduleStatuses],
-            },
-            assignments: {
-              some: {
-                wardId: staff.homeWardId,
-              },
-            },
-          },
-          include: {
-            cycle: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 12,
-        }),
-      ])
-    : [[], []];
-  const selectedVersion =
-    sortVisibleVersions(staffVersions)[0] ??
-    sortVisibleVersions(wardVersions)[0] ??
-    null;
+  const homeWardVersions = staff
+    ? await prisma.scheduleWardVersion.findMany({
+        where: {
+          wardId: staff.homeWardId,
+          status: { in: [...visibleScheduleStatuses] },
+          scheduleVersion: { assignments: { some: { wardId: staff.homeWardId } } },
+        },
+        include: { scheduleVersion: { include: { cycle: true } } },
+        orderBy: { versionNo: "desc" },
+        take: 12,
+      })
+    : [];
+  const selectedWardVersion = sortVisibleVersions(homeWardVersions)[0] ?? null;
+  const selectedVersion = selectedWardVersion
+    ? {
+        ...selectedWardVersion.scheduleVersion,
+        status: selectedWardVersion.status,
+        createdAt: selectedWardVersion.createdAt,
+      }
+    : null;
   const scheduleMonthStart = selectedVersion
     ? new Date(
         normalizeYear(selectedVersion.cycle.year),
@@ -224,6 +186,22 @@ async function getUserHomeDashboardData(
       ? today
       : scheduleMonthStart;
   const nextSevenDaysEnd = addDays(upcomingStart, 7);
+  const activeCycleVersionIds = selectedVersion
+    ? Array.from(
+        new Set(
+          (
+            await prisma.scheduleWardVersion.findMany({
+              where: {
+                cycleId: selectedVersion.cycleId,
+                status: "published",
+                NOT: { wardId: staff!.homeWardId },
+              },
+              select: { scheduleVersionId: true },
+            })
+          ).map((item) => item.scheduleVersionId).concat(selectedVersion.id),
+        ),
+      )
+    : [];
   const latestCycle = await prisma.scheduleCycle.findFirst({
     orderBy: [
       {
@@ -239,7 +217,7 @@ async function getUserHomeDashboardData(
     staff && selectedVersion
       ? await prisma.scheduleAssignment.findMany({
           where: {
-            scheduleVersionId: selectedVersion.id,
+            scheduleVersionId: { in: activeCycleVersionIds },
             staffId: staff.id,
             workDate: {
               gte: scheduleMonthStart,
@@ -263,7 +241,7 @@ async function getUserHomeDashboardData(
     staff && selectedVersion
       ? await prisma.scheduleAssignment.findMany({
           where: {
-            scheduleVersionId: selectedVersion.id,
+            scheduleVersionId: { in: activeCycleVersionIds },
             staffId: staff.id,
             workDate: {
               gte: upcomingStart,
@@ -306,7 +284,11 @@ async function getUserHomeDashboardData(
         ).getDate()
       : 0,
   });
-  const todayShift = mapTodayShift(todayAssignment, staff?.homeWard.code ?? "-");
+  const todayShift = mapTodayShift(
+    todayAssignment,
+    staff?.homeWard.code ?? "-",
+    actualScheduleCounts,
+  );
 
   return {
     variant: "user",
@@ -350,7 +332,7 @@ async function getUserHomeDashboardData(
             : formatMonthYear(latestCycle.month, latestCycle.year),
           time: latestCycle.requestCloseDate
             ? "ปิดรับคำขอ"
-            : formatCycleStatus(latestCycle.status),
+            : formatCycleStatus(resolveCycleStatus(latestCycle)),
         }
       : {
           label: "รอบจัดเวรถัดไป",
@@ -465,40 +447,45 @@ function normalizePlainShiftCode(value: string) {
 function mapTodayShift(
   assignment: PublishedAssignment | undefined,
   fallbackWardCode: string,
+  monthlyCounts: {
+    shiftCount: number;
+    otCount: number;
+  },
 ) {
   if (!assignment) {
     return {
       hasSchedule: false,
       label: "เวรของฉันวันนี้",
-      shiftName: "ไม่มีเวร",
+      shiftName: "วันหยุด",
+      shifts: ["off"],
       ward: fallbackWardCode,
-      time: "ยังไม่มีเวรที่ต้องเข้าวันนี้",
-      summary: [
-        { label: "ดึก", value: "0" },
-        { label: "เช้า", value: "0" },
-        { label: "บ่าย", value: "0" },
-      ],
+      time: "",
+      summary: buildTodaySummary([], monthlyCounts),
     };
   }
+
+  const shifts = normalizeShiftCodes(assignment.shiftCode);
 
   return {
     hasSchedule: true,
     label: "เวรของฉันวันนี้",
     shiftName: formatShiftCode(assignment.shiftCode),
+    shifts,
     ward: assignment.ward.code,
     time: getShiftTime(assignment.shiftCode),
-    summary: [
-      { label: "ดึก", value: normalizeShiftCode(assignment.shiftCode) === "night" ? "1" : "0" },
-      {
-        label: "เช้า",
-        value: normalizeShiftCode(assignment.shiftCode) === "morning" ? "1" : "0",
-      },
-      {
-        label: "บ่าย",
-        value: normalizeShiftCode(assignment.shiftCode) === "afternoon" ? "1" : "0",
-      },
-    ],
+    summary: buildTodaySummary(shifts, monthlyCounts),
   };
+}
+
+function buildTodaySummary(
+  shifts: string[],
+  monthlyCounts: { shiftCount: number; otCount: number },
+) {
+  return [
+    { label: "เวรวันนี้", value: shifts.length.toString() },
+    { label: "OT เดือนนี้", value: monthlyCounts.otCount.toString() },
+    { label: "เวรเดือนนี้", value: monthlyCounts.shiftCount.toString() },
+  ];
 }
 
 function buildUpcomingDays(
@@ -510,13 +497,13 @@ function buildUpcomingDays(
     const assignment = assignments.find(
       (item) => startOfDay(item.workDate).getTime() === date.getTime(),
     );
-    const shift = assignment ? normalizeShiftCode(assignment.shiftCode) : "off";
+    const shifts = assignment ? normalizeShiftCodes(assignment.shiftCode) : [];
 
     return {
       id: date.toISOString(),
       day: new Intl.DateTimeFormat("th-TH", { weekday: "short" }).format(date),
       date: new Intl.DateTimeFormat("th-TH", { day: "numeric" }).format(date),
-      shift,
+      shifts,
       shiftLabel: assignment ? formatShiftCode(assignment.shiftCode) : "หยุด",
       isToday: index === 0,
     };
@@ -541,8 +528,17 @@ function normalizeShiftCode(shiftCode: string): "night" | "morning" | "afternoon
   return "off";
 }
 
+function normalizeShiftCodes(shiftCode: string) {
+  return Array.from(
+    new Set(
+      splitShiftCode(stripInlineOt(shiftCode))
+        .map((code) => normalizeShiftCode(code))
+        .filter((shift) => shift !== "off"),
+    ),
+  );
+}
+
 function formatShiftCode(shiftCode: string) {
-  const shift = normalizeShiftCode(shiftCode);
   const labels = {
     night: "ดึก",
     morning: "เช้า",
@@ -550,11 +546,11 @@ function formatShiftCode(shiftCode: string) {
     off: "หยุด",
   };
 
-  return labels[shift];
+  const shifts = normalizeShiftCodes(shiftCode);
+  return shifts.length > 0 ? shifts.map((shift) => labels[shift]).join(" / ") : labels.off;
 }
 
 function getShiftTime(shiftCode: string) {
-  const shift = normalizeShiftCode(shiftCode);
   const times = {
     night: "00.00 - 08.00 น.",
     morning: "08.00 - 16.00 น.",
@@ -562,7 +558,10 @@ function getShiftTime(shiftCode: string) {
     off: "ไม่ต้องเข้าเวร",
   };
 
-  return times[shift];
+  const shifts = normalizeShiftCodes(shiftCode);
+  return shifts.length > 0
+    ? shifts.map((shift) => times[shift]).join(" / ")
+    : times.off;
 }
 
 function formatMonthYear(month: number, year: number) {

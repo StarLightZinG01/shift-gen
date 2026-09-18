@@ -23,6 +23,9 @@ export type ManualScheduleStaffOption = {
   staffCode: string;
   fullName: string;
   homeWardCode: string;
+  isHead: boolean;
+  payPosition: string;
+  staffCategory: string;
 };
 
 export type ManualScheduleCell = {
@@ -43,6 +46,8 @@ export type ManualScheduleRow = {
   staffCode: string;
   fullName: string;
   isHead: boolean;
+  payPosition: string;
+  staffCategory: string;
   cells: ManualScheduleCell[];
 };
 
@@ -107,7 +112,6 @@ export type ManualScheduleData = {
   daysInMonth: number;
   holidayDays: number[];
   canEdit: boolean;
-  canCreateManualVersion: boolean;
   canPublish: boolean;
   history: ManualChangeHistoryRow[];
   coverageWarnings: CoverageWarning[];

@@ -26,6 +26,25 @@ export function validateGaInput(input: Omit<GaInput, "validation">): GaInputVali
       if (requirement.min < 0 || requirement.max < 0 || requirement.min > requirement.max) {
         errors.push(`วอร์ด ${ward.code} กำลังคนกะ ${shiftCode} ไม่ถูกต้อง`);
       }
+
+      const holidayRequirement = ward.holidayRequirements[shiftCode];
+      if (
+        !holidayRequirement ||
+        holidayRequirement.min < 0 ||
+        holidayRequirement.max < 0 ||
+        holidayRequirement.min > holidayRequirement.max
+      ) {
+        errors.push(`วอร์ด ${ward.code} กำลังคนวันหยุดกะ ${shiftCode} ไม่ถูกต้อง`);
+      }
+
+      for (const [dayLabel, composition] of [
+        ["วันธรรมดา", ward.composition[shiftCode]],
+        ["วันหยุด", ward.holidayComposition[shiftCode]],
+      ] as const) {
+        if (composition.rn_required < 0 || composition.pn_na_required < 0) {
+          errors.push(`วอร์ด ${ward.code} จำนวน RN/PN/NA ${dayLabel} กะ ${shiftCode} ไม่ถูกต้อง`);
+        }
+      }
     }
 
     if (ward.staff.length === 0) {
@@ -65,6 +84,21 @@ export function validateGaInput(input: Omit<GaInput, "validation">): GaInputVali
   for (const request of input.availabilityRequests) {
     if (!gaStaffCodes.has(request.staffCode)) {
       warnings.push(`มีคำขอของ ${request.staffCode} แต่ไม่พบคนนี้ใน staff ของรอบจัดตาราง`);
+    }
+  }
+
+  const wardCodes = new Set(input.wards.map((ward) => ward.code));
+  for (const rule of input.custom_rules) {
+    if (!wardCodes.has(rule.ward)) {
+      errors.push(`กฎเฉพาะ ${rule.rule_name} อ้างถึงวอร์ดที่ไม่ได้เลือก`);
+    }
+
+    if (
+      Object.values(rule.parameters).some(
+        (value) => !Number.isInteger(value) || value < 0,
+      )
+    ) {
+      errors.push(`ค่าที่กำหนดในกฎเฉพาะ ${rule.rule_name} ไม่ถูกต้อง`);
     }
   }
 

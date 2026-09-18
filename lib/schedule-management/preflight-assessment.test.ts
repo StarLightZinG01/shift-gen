@@ -34,9 +34,12 @@ test("returns no risk block for a comfortably staffed ward", () => {
     cycle,
     staffRows: buildStaff(20),
     staffingRequirements: {
-      morning: { min: 3, max: 3 },
-      afternoon: { min: 2, max: 2 },
-      night: { min: 2, max: 2 },
+      morning: requirement(3, 3),
+      afternoon: requirement(2, 2),
+      night: requirement(2, 2),
+      holidayMorning: requirement(3, 3),
+      holidayAfternoon: requirement(2, 2),
+      holidayNight: requirement(2, 2),
     },
     settings,
     sharedStaffUsage: [],
@@ -54,9 +57,12 @@ test("detects daily and weekly capacity shortages", () => {
     cycle,
     staffRows,
     staffingRequirements: {
-      morning: { min: 6, max: 6 },
-      afternoon: { min: 2, max: 2 },
-      night: { min: 2, max: 2 },
+      morning: requirement(6, 6),
+      afternoon: requirement(2, 2),
+      night: requirement(2, 2),
+      holidayMorning: requirement(6, 6),
+      holidayAfternoon: requirement(2, 2),
+      holidayNight: requirement(2, 2),
     },
     settings,
     sharedStaffUsage: [],
@@ -78,9 +84,12 @@ test("detects conflicting and forbidden preferred-shift requests", () => {
     cycle,
     staffRows,
     staffingRequirements: {
-      morning: { min: 4, max: 6 },
-      afternoon: { min: 2, max: 3 },
-      night: { min: 2, max: 3 },
+      morning: requirement(4, 6),
+      afternoon: requirement(2, 3),
+      night: requirement(2, 3),
+      holidayMorning: requirement(4, 6),
+      holidayAfternoon: requirement(2, 3),
+      holidayNight: requirement(2, 3),
     },
     settings,
     sharedStaffUsage: [],
@@ -89,6 +98,77 @@ test("detects conflicting and forbidden preferred-shift requests", () => {
 
   assert.equal(ids.has("request-conflict"), true);
   assert.equal(ids.has("preferred-forbidden-sequence"), true);
+});
+
+test("detects daily RN and PN/NA capacity shortages by category", () => {
+  const staffRows = buildStaff(8).map((row, index) => ({
+    ...row,
+    staffCategory: (index < 5 ? "RN" : "PN") as StaffRow["staffCategory"],
+    off: index < 2 || index === 5 ? "1" : "0",
+  }));
+  const exact = {
+    min: 6,
+    max: 6,
+    rnRequired: 4,
+    pnNaRequired: 2,
+    requiresIncharge: false,
+  };
+  const risks = assessSchedulePreflight({
+    cycle,
+    staffRows,
+    staffingRequirements: {
+      morning: exact,
+      afternoon: exact,
+      night: exact,
+      holidayMorning: exact,
+      holidayAfternoon: exact,
+      holidayNight: exact,
+    },
+    settings,
+    sharedStaffUsage: [],
+  });
+  const ids = new Set(risks.map((risk) => risk.id));
+
+  assert.equal(ids.has("daily-rn-capacity"), true);
+  assert.equal(ids.has("daily-pn-na-capacity"), true);
+});
+
+test("detects an odd PN/NA target when pair rule is enabled", () => {
+  const staffRows = buildStaff(12).map((row, index) => ({
+    ...row,
+    staffCategory: (index < 6 ? "RN" : index < 9 ? "PN" : "NA") as StaffRow["staffCategory"],
+  }));
+  const exact = {
+    min: 7,
+    max: 7,
+    rnRequired: 4,
+    pnNaRequired: 3,
+    requiresIncharge: false,
+  };
+  const risks = assessSchedulePreflight({
+    cycle,
+    staffRows,
+    staffingRequirements: {
+      morning: exact,
+      afternoon: exact,
+      night: exact,
+      holidayMorning: exact,
+      holidayAfternoon: exact,
+      holidayNight: exact,
+    },
+    settings,
+    sharedStaffUsage: [],
+    specialRuleSettings: [{
+      ruleKey: "pn_na_equal_per_shift",
+      enabled: true,
+      parameters: { minEach: 1 },
+    }],
+  });
+
+  assert.equal(
+    risks.some((risk) => risk.id === "special-pn-na-pair-count-conflict"),
+    true,
+  );
 });
 
 function buildStaff(count: number): StaffRow[] {
@@ -110,5 +190,18 @@ function buildStaff(count: number): StaffRow[] {
     preferredShifts: "0",
     isHead: index === 0,
     isTrainee: false,
+    staffCategory: "RN",
+    isNewNurse: false,
+    canBeInCharge: index === 0,
   }));
+}
+
+function requirement(min: number, max: number) {
+  return {
+    min,
+    max,
+    rnRequired: 0,
+    pnNaRequired: 0,
+    requiresIncharge: false,
+  };
 }

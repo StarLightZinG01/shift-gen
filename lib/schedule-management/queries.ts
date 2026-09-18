@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { resolveCycleStatus } from "@/lib/schedule-rounds/cycle-status";
 import { getGaSettingsData } from "@/lib/schedule-rounds/ga-settings";
 
 import { mockCycle } from "./mock-data";
@@ -12,6 +13,11 @@ import type {
   StaffRow,
   WardContext,
 } from "./types";
+import {
+  buildDefaultSpecialRuleSettings,
+  mergeStoredSpecialRuleSettings,
+} from "./special-rules";
+import { sortStaffRows } from "./staff-order";
 
 export async function getSchedulePreflightContext(
   cycleId: string | null,
@@ -134,7 +140,7 @@ export async function getCurrentCycle(): Promise<CycleContext> {
   const cycle = await prisma.scheduleCycle.findFirst({
     where: {
       status: {
-        in: ["preparing", "draft", "open"],
+          in: ["preparing", "draft", "open", "locked"],
       },
     },
     orderBy: [
@@ -157,7 +163,7 @@ export async function getCurrentCycle(): Promise<CycleContext> {
     id: cycle.id,
     month: cycle.month,
     year: cycle.year,
-    status: cycle.status,
+    status: resolveCycleStatus(cycle),
     requestOpenDate: cycle.requestOpenDate,
     requestCloseDate: cycle.requestCloseDate,
     dataLockDate: cycle.dataLockDate,
@@ -204,7 +210,7 @@ export async function getCurrentCycleOrNull(): Promise<CycleContext | null> {
     id: cycle.id,
     month: cycle.month,
     year: cycle.year,
-    status: cycle.status,
+    status: resolveCycleStatus(cycle),
     requestOpenDate: cycle.requestOpenDate,
     requestCloseDate: cycle.requestCloseDate,
     dataLockDate: cycle.dataLockDate,
@@ -296,7 +302,9 @@ export async function getStaffRowsForWard(
     ),
   ];
 
-  return applyAvailabilityRequestsToStaffRows(staffRows, cycleId);
+  return sortStaffRows(
+    await applyAvailabilityRequestsToStaffRows(staffRows, cycleId),
+  );
 }
 
 export async function getExternalStaffCandidates(
@@ -338,6 +346,9 @@ export async function getExternalStaffCandidates(
       shiftPayRate: member.shiftPayRate.toString(),
       isHead: member.isHead,
       isTrainee: member.isTrainee,
+      staffCategory: member.staffCategory,
+      isNewNurse: member.isNewNurse,
+      canBeInCharge: member.canBeInCharge,
     };
   });
 }
@@ -371,6 +382,9 @@ function mapStaffToRow(
     preferredShifts: "0",
     isHead: member.isHead,
     isTrainee: member.isTrainee,
+    staffCategory: member.staffCategory,
+    isNewNurse: member.isNewNurse,
+    canBeInCharge: member.canBeInCharge,
   };
 }
 
@@ -388,6 +402,9 @@ function mapSnapshotToRow(
     shiftPayRate: unknown;
     isHead: boolean;
     isTrainee: boolean;
+    staffCategory: "RN" | "PN" | "NA" | "OTHER";
+    isNewNurse: boolean;
+    canBeInCharge: boolean;
   },
   staffById: Map<string, NonNullable<StaffWithWardPermissions>>,
 ): StaffRow {
@@ -417,6 +434,9 @@ function mapSnapshotToRow(
     preferredShifts: "0",
     isHead: snapshot.isHead,
     isTrainee: snapshot.isTrainee,
+    staffCategory: snapshot.staffCategory,
+    isNewNurse: snapshot.isNewNurse,
+    canBeInCharge: snapshot.canBeInCharge,
   };
 }
 
@@ -515,27 +535,81 @@ export async function getStaffingRequirements(
 
     if (["night", "n"].includes(shiftCode)) {
       requirements.night = {
-        min: requirement.minStaff,
-        max: requirement.maxStaff,
+        min: requirement.rnRequired + requirement.pnNaRequired,
+        max: requirement.rnRequired + requirement.pnNaRequired,
+        rnRequired: requirement.rnRequired,
+        pnNaRequired: requirement.pnNaRequired,
+        requiresIncharge: requirement.requiresIncharge,
+      };
+      requirements.holidayNight = {
+        min: requirement.holidayRnRequired + requirement.holidayPnNaRequired,
+        max: requirement.holidayRnRequired + requirement.holidayPnNaRequired,
+        rnRequired: requirement.holidayRnRequired,
+        pnNaRequired: requirement.holidayPnNaRequired,
+        requiresIncharge: requirement.holidayRequiresIncharge,
       };
     }
 
     if (["morning", "m"].includes(shiftCode)) {
       requirements.morning = {
-        min: requirement.minStaff,
-        max: requirement.maxStaff,
+        min: requirement.rnRequired + requirement.pnNaRequired,
+        max: requirement.rnRequired + requirement.pnNaRequired,
+        rnRequired: requirement.rnRequired,
+        pnNaRequired: requirement.pnNaRequired,
+        requiresIncharge: requirement.requiresIncharge,
+      };
+      requirements.holidayMorning = {
+        min: requirement.holidayRnRequired + requirement.holidayPnNaRequired,
+        max: requirement.holidayRnRequired + requirement.holidayPnNaRequired,
+        rnRequired: requirement.holidayRnRequired,
+        pnNaRequired: requirement.holidayPnNaRequired,
+        requiresIncharge: requirement.holidayRequiresIncharge,
       };
     }
 
     if (["afternoon", "a"].includes(shiftCode)) {
       requirements.afternoon = {
-        min: requirement.minStaff,
-        max: requirement.maxStaff,
+        min: requirement.rnRequired + requirement.pnNaRequired,
+        max: requirement.rnRequired + requirement.pnNaRequired,
+        rnRequired: requirement.rnRequired,
+        pnNaRequired: requirement.pnNaRequired,
+        requiresIncharge: requirement.requiresIncharge,
+      };
+      requirements.holidayAfternoon = {
+        min: requirement.holidayRnRequired + requirement.holidayPnNaRequired,
+        max: requirement.holidayRnRequired + requirement.holidayPnNaRequired,
+        rnRequired: requirement.holidayRnRequired,
+        pnNaRequired: requirement.holidayPnNaRequired,
+        requiresIncharge: requirement.holidayRequiresIncharge,
       };
     }
   }
 
   return requirements;
+}
+
+export async function getSpecialRuleSettings(
+  cycleId: string | null,
+  wardId: string,
+  wardCode: string,
+) {
+  if (!cycleId) {
+    return buildDefaultSpecialRuleSettings(wardCode);
+  }
+
+  const preparation = await prisma.wardCyclePreparation.findUnique({
+    where: {
+      cycleId_wardId: { cycleId, wardId },
+    },
+    include: {
+      specialRuleSettings: true,
+    },
+  });
+
+  return mergeStoredSpecialRuleSettings(
+    wardCode,
+    preparation?.specialRuleSettings ?? [],
+  );
 }
 
 async function applyAvailabilityRequestsToStaffRows(

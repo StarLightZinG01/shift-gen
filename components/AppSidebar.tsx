@@ -25,10 +25,8 @@ import {
   CalendarSetting01Icon,
   CalendarSyncIcon,
   CalendarXIcon,
-  DatabaseImportIcon,
   Home07Icon,
   Logout02Icon,
-  UserShield01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
@@ -40,8 +38,6 @@ const iconByUrl: Record<string, typeof Home07Icon> = {
   "/home/leave-requests": CalendarXIcon,
   "/home/schedule-management": CalendarSetting01Icon,
   "/home/schedule-rounds": CalendarSyncIcon,
-  "/admin/import-users": DatabaseImportIcon,
-  "/admin/create-admin": UserShield01Icon,
 } as const;
 
 type AppSidebarProps = {

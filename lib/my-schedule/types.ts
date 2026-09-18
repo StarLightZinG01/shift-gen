@@ -17,6 +17,7 @@ export type MyScheduleStaff = {
   isHead: boolean;
   isCurrentUser: boolean;
   payPosition: string;
+  staffCategory: string;
   otRate: number;
   shiftPayRate: number;
 };
@@ -28,6 +29,7 @@ export type MyScheduleAssignment = {
   fullName: string;
   isHead: boolean;
   payPosition: string;
+  staffCategory: string;
   otRate: number;
   shiftPayRate: number;
   wardId: string;

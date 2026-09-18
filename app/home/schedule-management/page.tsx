@@ -4,6 +4,7 @@ import {
   getExternalStaffCandidates,
   getRequestSummaryRows,
   getSchedulePreflightContext,
+  getSpecialRuleSettings,
   getStaffingRequirements,
   getStaffRowsForWard,
   getWardContext,
@@ -25,6 +26,9 @@ export default async function ScheduleManagementPage() {
   const preflight = ward
     ? await getSchedulePreflightContext(cycle.id, ward.id)
     : null;
+  const specialRuleSettings = ward
+    ? await getSpecialRuleSettings(cycle.id, ward.id, ward.code)
+    : [];
 
   return (
     <ScheduleManagementView
@@ -42,6 +46,7 @@ export default async function ScheduleManagementPage() {
         morningRegularRequired: true,
       }}
       sharedStaffUsage={preflight?.sharedStaffUsage ?? []}
+      specialRuleSettings={specialRuleSettings}
       ward={ward}
     />
   );

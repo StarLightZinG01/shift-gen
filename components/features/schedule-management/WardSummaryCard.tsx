@@ -1,39 +1,39 @@
+"use client";
+
+import { useScheduleManagementLiveData } from "@/components/features/schedule-management/ScheduleManagementForm";
 import { buildWardSummary } from "@/lib/schedule-management/ward-summary";
-import type { ReactNode } from "react";
-import type {
-  RequestSummaryRow,
-  StaffingRequirements,
-  StaffRow,
-  WardContext,
-} from "@/lib/schedule-management/types";
+import type { ShiftRequirementSummary } from "@/lib/schedule-management/ward-summary";
+import type { CycleContext, WardContext } from "@/lib/schedule-management/types";
 
 type WardSummaryCardProps = {
+  cycle: CycleContext;
   ward: WardContext | null;
-  staffRows: StaffRow[];
-  requestRows: RequestSummaryRow[];
-  staffingRequirements: StaffingRequirements | null;
 };
 
-export function WardSummaryCard({
-  ward,
-  staffRows,
-  requestRows,
-  staffingRequirements,
-}: WardSummaryCardProps) {
+const SHIFT_ROWS = [
+  { key: "night", label: "ดึก" },
+  { key: "morning", label: "เช้า" },
+  { key: "afternoon", label: "บ่าย" },
+] as const;
+
+export function WardSummaryCard({ cycle, ward }: WardSummaryCardProps) {
+  const liveData = useScheduleManagementLiveData();
   const summary = buildWardSummary({
     wardCode: ward?.code,
-    staffRows,
-    requestRows,
-    staffingRequirements,
+    staffRows: liveData.staffRows,
+    staffingRequirements: liveData.staffingRequirements,
+    specialRuleSettings: liveData.specialRuleSettings,
+    cycle,
+    ward,
   });
 
   return (
-    <section className="flex h-full max-h-[410px] min-h-0 flex-col rounded-2xl border bg-white p-6 shadow-sm">
+    <section className="h-full rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold">6. สรุปข้อมูลวอร์ด</h2>
+          <h2 className="font-semibold">7. สรุปข้อมูลวอร์ด</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            ภาพรวมข้อมูลก่อนนำไปจัดตารางเวร
+            ข้อมูลสำคัญก่อนนำไปจัดตารางเวร
           </p>
         </div>
         <span
@@ -47,62 +47,58 @@ export function WardSummaryCard({
         </span>
       </div>
 
-      <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
-        <div className="space-y-4">
-          <SummaryGroup>
-            <SummaryRow label="บุคลากรทั้งหมด" value={`${summary.totalStaff} คน`} />
-            <SummaryRow label="หัวหน้าวอร์ด" value={`${summary.headCount} คน`} />
-            <SummaryRow
-              label="พยาบาลฝึกหัด"
-              value={`${summary.traineeCount} คน`}
-            />
-            <SummaryRow
-              label="บุคลากรช่วยวอร์ดนี้"
-              value={`${summary.externalStaffCount} คน`}
-            />
-          </SummaryGroup>
+      <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
+        <SummaryStat label="บุคลากรทั้งหมด" value={`${summary.totalStaff} คน`} />
+        <SummaryStat label="RN" value={`${summary.rnCount} คน`} />
+        <SummaryStat label="PN/NA" value={`${summary.pnCount + summary.naCount} คน`} />
+        <SummaryStat label="Incharge" value={`${summary.inchargeCount} คน`} />
+      </div>
 
-          <SummaryGroup title="กำลังคนต่อกะ">
-            <SummaryRow label="เช้า" value={summary.shiftRequirements.morning} />
-            <SummaryRow label="บ่าย" value={summary.shiftRequirements.afternoon} />
-            <SummaryRow label="ดึก" value={summary.shiftRequirements.night} />
-          </SummaryGroup>
-
-          <SummaryGroup>
-            <SummaryRow
-              label="คำขอวันลา/ไม่สะดวก"
-              value={`${summary.requestCount} รายการ`}
-            />
-            <SummaryRow label="สถานะข้อมูล" value={summary.readinessStatusLabel} />
-          </SummaryGroup>
+      <div className="mt-5 border-t pt-4">
+        <p className="mb-3 text-sm font-semibold">กำลังคนรวมต่อกะ</p>
+        <div className="grid grid-cols-[2.5rem_1fr_1fr] text-xs">
+          <div />
+          <div className="pb-2 text-center font-medium text-muted-foreground">
+            วันราชการ
+          </div>
+          <div className="pb-2 text-center font-medium text-muted-foreground">
+            วันหยุด
+          </div>
+          {SHIFT_ROWS.map((shift) => (
+            <div key={shift.key} className="contents">
+              <div className="border-t py-2.5 font-medium">{shift.label}</div>
+              <ShiftTotal value={summary.shiftRequirements.regular[shift.key]} />
+              <ShiftTotal value={summary.shiftRequirements.holiday[shift.key]} />
+            </div>
+          ))}
         </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t pt-4 text-sm">
+        <p className="text-muted-foreground">
+          กฎเฉพาะที่เปิด <strong className="text-foreground">{summary.enabledSpecialRules.length} กฎ</strong>
+        </p>
+        <p className="text-muted-foreground">
+          คำขอทั้งหมด <strong className="text-foreground">{summary.requestCounts.total} รายการ</strong>
+        </p>
       </div>
     </section>
   );
 }
 
-function SummaryGroup({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title?: string;
-}) {
+function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#E4EEF1] bg-[#F8FDFE] p-4">
-      {title ? (
-        <p className="mb-3 text-sm font-semibold text-[#0F172A]">{title}</p>
-      ) : null}
-      <div className="space-y-2">{children}</div>
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-bold">{value}</p>
     </div>
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function ShiftTotal({ value }: { value: ShiftRequirementSummary }) {
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="shrink-0 font-semibold text-[#0F172A]">{value}</span>
+    <div className="border-t py-2.5 text-center font-semibold">
+      {value.total === null ? "-" : `${value.total} คน`}
     </div>
   );
 }

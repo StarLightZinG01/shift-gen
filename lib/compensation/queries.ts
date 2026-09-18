@@ -10,20 +10,19 @@ import { prisma } from "@/lib/prisma";
 export async function getCompensationSummary(
   scheduleVersionId?: string | null,
 ): Promise<CompensationSummaryData> {
-  const versions = await prisma.scheduleVersion.findMany({
+  const versions = await prisma.scheduleWardVersion.findMany({
     where: {
       status: {
         notIn: ["generating", "failed"],
       },
-      assignments: {
-        some: {},
-      },
+      scheduleVersion: { assignments: { some: {} } },
     },
     include: {
-      cycle: true,
+      ward: true,
+      scheduleVersion: { include: { cycle: true } },
     },
     orderBy: {
-      createdAt: "desc",
+      versionNo: "desc",
     },
     take: 20,
   });
@@ -31,6 +30,7 @@ export async function getCompensationSummary(
   if (versions.length === 0) {
     return {
       scheduleVersionId: null,
+      selectedVersionOptionId: null,
       scheduleVersionLabel: "ยังไม่มีตารางเวร",
       versionOptions: [],
       totalOtAmount: 0,
@@ -46,7 +46,8 @@ export async function getCompensationSummary(
   const [storedSummaries, assignments] = await Promise.all([
     prisma.wardCompensationSummary.findMany({
       where: {
-        scheduleVersionId: selectedVersion.id,
+        scheduleVersionId: selectedVersion.scheduleVersionId,
+        wardId: selectedVersion.wardId,
       },
       include: {
         ward: true,
@@ -60,7 +61,8 @@ export async function getCompensationSummary(
     }),
     prisma.scheduleAssignment.findMany({
       where: {
-        scheduleVersionId: selectedVersion.id,
+        scheduleVersionId: selectedVersion.scheduleVersionId,
+        wardId: selectedVersion.wardId,
       },
       include: {
         staff: true,
@@ -88,7 +90,8 @@ export async function getCompensationSummary(
   );
 
   return {
-    scheduleVersionId: selectedVersion.id,
+    scheduleVersionId: selectedVersion.scheduleVersionId,
+    selectedVersionOptionId: selectedVersion.id,
     scheduleVersionLabel: formatVersionLabel(selectedVersion),
     versionOptions: versions.map(toVersionOption),
     ...totals,
@@ -101,7 +104,14 @@ export async function getWardCompensationDetail(
   scheduleVersionId: string,
   wardId: string,
 ) {
-  const data = await getCompensationSummary(scheduleVersionId);
+  const wardVersion = await prisma.scheduleWardVersion.findUnique({
+    where: { scheduleVersionId_wardId: { scheduleVersionId, wardId } },
+    select: { id: true },
+  });
+  if (!wardVersion) {
+    return null;
+  }
+  const data = await getCompensationSummary(wardVersion.id);
   return data.wards.find((ward) => ward.wardId === wardId) ?? null;
 }
 
@@ -119,7 +129,17 @@ export async function getMyCompensationSummary(
     return null;
   }
 
-  const data = await getCompensationSummary(scheduleVersionId);
+  const wardVersion = await prisma.scheduleWardVersion.findFirst({
+    where: {
+      OR: [{ id: scheduleVersionId }, { scheduleVersionId }],
+      wardId: staff.homeWardId,
+    },
+    select: { id: true },
+  });
+  if (!wardVersion) {
+    return null;
+  }
+  const data = await getCompensationSummary(wardVersion.id);
   const staffSummary = data.wards
     .flatMap((ward) => ward.staffSummaries)
     .find((summary) => summary.staffId === staff.id);
@@ -178,10 +198,8 @@ function toVersionOption(version: {
   id: string;
   versionNo: number;
   status: string;
-  cycle: {
-    month: number;
-    year: number;
-  };
+  ward: { code: string };
+  scheduleVersion: { cycle: { month: number; year: number } };
 }): ScheduleVersionOption {
   return {
     id: version.id,
@@ -193,12 +211,10 @@ function toVersionOption(version: {
 function formatVersionLabel(version: {
   versionNo: number;
   status: string;
-  cycle: {
-    month: number;
-    year: number;
-  };
+  ward: { code: string };
+  scheduleVersion: { cycle: { month: number; year: number } };
 }) {
-  return `${formatMonthYear(version.cycle.month, version.cycle.year)} · v${version.versionNo} · ${formatVersionStatus(version.status)}`;
+  return `${version.ward.code} · ${formatMonthYear(version.scheduleVersion.cycle.month, version.scheduleVersion.cycle.year)} · v${version.versionNo} · ${formatVersionStatus(version.status)}`;
 }
 
 function formatVersionStatus(status: string) {

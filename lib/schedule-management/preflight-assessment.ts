@@ -2,9 +2,11 @@ import type {
   CycleContext,
   PreflightSettings,
   SharedStaffUsage,
+  ShiftStaffingRequirement,
   StaffingRequirements,
   StaffRow,
 } from "./types";
+import type { SpecialRuleSetting } from "./special-rules";
 
 export type PreflightRiskSeverity = "critical" | "warning";
 
@@ -22,6 +24,7 @@ type PreflightAssessmentInput = {
   staffingRequirements: StaffingRequirements | null;
   settings: PreflightSettings;
   sharedStaffUsage: SharedStaffUsage[];
+  specialRuleSettings?: SpecialRuleSetting[];
 };
 
 type ParsedStaff = StaffRow & {
@@ -49,6 +52,7 @@ export function assessSchedulePreflight({
   staffingRequirements,
   settings,
   sharedStaffUsage,
+  specialRuleSettings = [],
 }: PreflightAssessmentInput): PreflightRisk[] {
   const requirements = normalizeRequirements(staffingRequirements);
 
@@ -88,6 +92,47 @@ export function assessSchedulePreflight({
     });
   }
 
+  const configuredRequirements = [
+    staffingRequirements?.morning,
+    staffingRequirements?.afternoon,
+    staffingRequirements?.night,
+    staffingRequirements?.holidayMorning,
+    staffingRequirements?.holidayAfternoon,
+    staffingRequirements?.holidayNight,
+  ].filter((item): item is ShiftStaffingRequirement => Boolean(item));
+  const highestRnRequirement = Math.max(
+    0,
+    ...configuredRequirements.map((item) => item.rnRequired),
+  );
+  const highestPnNaRequirement = Math.max(
+    0,
+    ...configuredRequirements.map((item) => item.pnNaRequired),
+  );
+  const rnCount = staff.filter((row) => row.staffCategory === "RN").length;
+  const pnNaCount = staff.filter((row) =>
+    row.staffCategory === "PN" || row.staffCategory === "NA",
+  ).length;
+
+  if (rnCount < highestRnRequirement) {
+    addRisk({
+      id: "insufficient-rn-staff",
+      severity: "critical",
+      title: "จำนวน RN ไม่เพียงพอต่อกะ",
+      message: `วอร์ดมี RN ${rnCount} คน แต่มีบางกะกำหนดให้ RN ขึ้น ${highestRnRequirement} คน`,
+      recommendation: "ตรวจสอบประเภทบุคลากรและเพิ่ม RN ที่สามารถขึ้นเวรวอร์ดนี้ได้",
+    });
+  }
+
+  if (pnNaCount < highestPnNaRequirement) {
+    addRisk({
+      id: "insufficient-pn-na-staff",
+      severity: "critical",
+      title: "จำนวน PN/NA ไม่เพียงพอต่อกะ",
+      message: `วอร์ดมี PN/NA ${pnNaCount} คน แต่มีบางกะกำหนดให้ PN/NA ขึ้น ${highestPnNaRequirement} คน`,
+      recommendation: "ตรวจสอบประเภทบุคลากรและเพิ่ม PN/NA ที่สามารถขึ้นเวรวอร์ดนี้ได้",
+    });
+  }
+
   const missingRateStaff = staff.filter(
     (row) => !isPositiveNumber(row.otRate) || !isPositiveNumber(row.shiftPayRate),
   );
@@ -114,6 +159,13 @@ export function assessSchedulePreflight({
   });
 
   addDailyCapacityRisks(risks, dailyCapacity);
+  addDailyCategoryCapacityRisks(
+    risks,
+    dailyCapacity,
+    staffingRequirements!,
+    settings,
+    cycle,
+  );
   addRequestConflictRisks(risks, staff, requirements);
   addTraineeRisks(risks, dailyCapacity, requirements, settings);
   addWeeklyCapacityRisk(risks, staff, requirements, settings, daysInMonth);
@@ -130,8 +182,210 @@ export function assessSchedulePreflight({
   addHeadUsageRisk(risks, dailyCapacity, cycle, requirements, settings);
   addExternalStaffRisks(risks, staff, dailyCapacity, sharedStaffUsage);
   addBalanceRisks(risks, staff, requirements, cycle, daysInMonth);
+  addSpecialRuleRisks(
+    risks,
+    staff,
+    specialRuleSettings,
+    staffingRequirements,
+  );
 
   return risks.sort((a, b) => severityOrder(a.severity) - severityOrder(b.severity));
+}
+
+function addDailyCategoryCapacityRisks(
+  risks: PreflightRisk[],
+  dailyCapacity: DailyCapacity[],
+  requirements: StaffingRequirements,
+  settings: PreflightSettings,
+  cycle: CycleContext,
+) {
+  const holidayDays = new Set(
+    cycle.holidays.map((item) => item.date.getUTCDate()),
+  );
+  const maxDailyUnits =
+    settings.enableMorningEveningDouble || settings.enableNightEveningDouble ? 2 : 1;
+  const problems: Record<"RN" | "PN/NA", string[]> = { RN: [], "PN/NA": [] };
+
+  for (const item of dailyCapacity) {
+    const year = cycle.year > 2400 ? cycle.year - 543 : cycle.year;
+    const weekday = new Date(Date.UTC(year, cycle.month - 1, item.day)).getUTCDay();
+    const holiday = weekday === 0 || weekday === 6 || holidayDays.has(item.day);
+    const shifts = holiday
+      ? [requirements.holidayMorning, requirements.holidayAfternoon, requirements.holidayNight]
+      : [requirements.morning, requirements.afternoon, requirements.night];
+    if (!shifts.every((value): value is ShiftStaffingRequirement => Boolean(value))) {
+      continue;
+    }
+
+    const availableRn = item.available.filter((row) => row.staffCategory === "RN").length;
+    const availableSupport = item.available.filter(
+      (row) => row.staffCategory === "PN" || row.staffCategory === "NA",
+    ).length;
+    const requiredRn = shifts.reduce((sum, value) => sum + value.rnRequired, 0);
+    const requiredSupport = shifts.reduce((sum, value) => sum + value.pnNaRequired, 0);
+    if (
+      shifts.some((value) => value.rnRequired > availableRn) ||
+      requiredRn > availableRn * maxDailyUnits
+    ) {
+      problems.RN.push(`วันที่ ${item.day} ต้องใช้ RN รวม ${requiredRn} เวร แต่มี RN พร้อมทำงาน ${availableRn} คน`);
+    }
+    if (
+      shifts.some((value) => value.pnNaRequired > availableSupport) ||
+      requiredSupport > availableSupport * maxDailyUnits
+    ) {
+      problems["PN/NA"].push(
+        `วันที่ ${item.day} ต้องใช้ PN/NA รวม ${requiredSupport} เวร แต่มี PN/NA พร้อมทำงาน ${availableSupport} คน`,
+      );
+    }
+  }
+
+  for (const category of ["RN", "PN/NA"] as const) {
+    if (problems[category].length === 0) continue;
+    risks.push({
+      id: `daily-${category.toLowerCase().replace("/", "-")}-capacity`,
+      severity: "critical",
+      title: `${category} อาจไม่เพียงพอสำหรับกำลังคนรายวัน`,
+      message: formatExamples(problems[category]),
+      recommendation: `ตรวจสอบวันหยุดและคำขอของ ${category} หรือเพิ่มบุคลากรกลุ่มนี้ก่อนส่งข้อมูลให้ GA`,
+    });
+  }
+}
+
+function addSpecialRuleRisks(
+  risks: PreflightRisk[],
+  staff: ParsedStaff[],
+  settings: SpecialRuleSetting[],
+  staffingRequirements: StaffingRequirements | null,
+) {
+  const enabled = new Map(
+    settings.filter((item) => item.enabled).map((item) => [item.ruleKey, item]),
+  );
+  const rnCount = staff.filter((row) => row.staffCategory === "RN").length;
+
+  const inchargeRule = enabled.get("incharge_min_per_shift");
+  if (inchargeRule) {
+    const required = inchargeRule.parameters.minCount ?? 1;
+    const available = staff.filter((row) => row.canBeInCharge).length;
+    if (available < required) {
+      risks.push({
+        id: "special-incharge-capacity",
+        severity: "critical",
+        title: "RN.Incharge ไม่เพียงพอตามกฎเฉพาะ",
+        message: `กฎกำหนดให้แต่ละกะมี RN.Incharge อย่างน้อย ${required} คน แต่ข้อมูลวอร์ดมีผู้ที่เป็น Incharge ได้ ${available} คน`,
+        recommendation: "ตรวจสอบสถานะ Incharge ของบุคลากร หรือเพิ่มผู้ที่สามารถเป็น Incharge ให้เพียงพอต่อกะ",
+      });
+    }
+  }
+
+  if (enabled.has("icu_new_not_together")) {
+    const hasIcu = staff.some((row) => {
+      const role = normalizeRole(row.payPosition);
+      return role.includes("RNICU") || role.includes("RNSUC");
+    });
+    const hasNew = staff.some((row) => row.isNewNurse);
+    if (!hasIcu || !hasNew) {
+      risks.push({
+        id: "special-icu-new-data",
+        severity: "warning",
+        title: "ควรตรวจสอบข้อมูล RN ICU/RNSuC และ RN new",
+        message: "เปิดกฎ RN ICU/RNSuC และ RN new ไม่ขึ้นเวรด้วยกัน แต่ข้อมูลบุคลากรอาจยังระบุสองกลุ่มนี้ไม่ครบ",
+        recommendation: "ตรวจสอบตำแหน่ง RN ICU หรือ RNSuC และสถานะพยาบาลใหม่ของบุคลากรก่อนส่งข้อมูลให้ GA",
+      });
+    }
+  }
+
+  const sundayRule = enabled.get("sunday_morning_rn_exact");
+  const sundayRequired = sundayRule?.parameters.exactCount ?? 0;
+  if (sundayRule && rnCount < sundayRequired) {
+    risks.push({
+      id: "special-sunday-rn-capacity",
+      severity: "critical",
+      title: "RN ไม่พอสำหรับเวรเช้าวันอาทิตย์",
+      message: `กฎกำหนด RN เวรเช้าวันอาทิตย์เท่ากับ ${sundayRequired} คน แต่วอร์ดมี RN ${rnCount} คน`,
+      recommendation: "ตรวจสอบประเภทบุคลากรหรือเพิ่ม RN ที่สามารถขึ้นเวรวอร์ดนี้ได้",
+    });
+  }
+
+  const morningRule = enabled.get("morning_rn_by_day");
+  if (morningRule) {
+    const required = Math.max(...Object.values(morningRule.parameters), 0);
+    if (rnCount < required) {
+      risks.push({
+        id: "special-morning-rn-capacity",
+        severity: "critical",
+        title: "RN ไม่พอสำหรับกฎเวรเช้าแยกตามวัน",
+        message: `กฎเฉพาะต้องใช้ RN เวรเช้าสูงสุด ${required} คน แต่วอร์ดมี RN ${rnCount} คน`,
+        recommendation: "ตรวจสอบประเภทบุคลากรหรือเพิ่ม RN ที่สามารถขึ้นเวรวอร์ดนี้ได้",
+      });
+    }
+  }
+
+  const weekdayMorningPnRule = enabled.get("weekday_morning_pn_exact");
+  if (weekdayMorningPnRule) {
+    const required = weekdayMorningPnRule.parameters.exactCount ?? 1;
+    const available = staff.filter((row) => row.staffCategory === "PN").length;
+    if (available < required) {
+      risks.push({
+        id: "special-weekday-morning-pn-capacity",
+        severity: "critical",
+        title: "PN ไม่พอสำหรับเวรเช้าวันราชการ",
+        message: `กฎกำหนด PN เวรเช้าวันราชการเท่ากับ ${required} คน แต่วอร์ดมี PN ${available} คน`,
+        recommendation: "ตรวจสอบประเภทบุคลากรหรือเพิ่ม PN ที่สามารถขึ้นเวรวอร์ดนี้ได้",
+      });
+    }
+    const configured = staffingRequirements?.morning?.pnNaRequired ?? 0;
+    if (configured < required) {
+      risks.push({
+        id: "special-weekday-morning-pn-requirement",
+        severity: "critical",
+        title: "จำนวน PN ขัดกับกำลังคนเวรเช้า",
+        message: `เวรเช้าวันราชการกำหนด PN/NA รวม ${configured} คน แต่กฎเฉพาะกำหนด PN เท่ากับ ${required} คน`,
+        recommendation: "กำหนดจำนวน PN/NA ของเวรเช้าวันราชการให้ไม่น้อยกว่าจำนวน PN ในกฎเฉพาะ",
+      });
+    }
+  }
+
+  const pairRule = enabled.get("pn_na_equal_per_shift");
+  if (pairRule) {
+    const minimum = pairRule.parameters.minEach ?? 1;
+    const pnCount = staff.filter((row) => row.staffCategory === "PN").length;
+    const naCount = staff.filter((row) => row.staffCategory === "NA").length;
+    if (pnCount < minimum || naCount < minimum) {
+      risks.push({
+        id: "special-pn-na-pair-capacity",
+        severity: "critical",
+        title: "PN หรือ NA ไม่พอสำหรับจัดเป็นคู่",
+        message: `แต่ละกะต้องมี PN และ NA อย่างละอย่างน้อย ${minimum} คน แต่ข้อมูลวอร์ดมี PN ${pnCount} คน และ NA ${naCount} คน`,
+        recommendation: "ตรวจสอบประเภทบุคลากรและเพิ่ม PN หรือ NA ที่สามารถขึ้นเวรวอร์ดนี้ได้",
+      });
+    }
+    const configuredSupportCounts = [
+      staffingRequirements?.morning,
+      staffingRequirements?.afternoon,
+      staffingRequirements?.night,
+      staffingRequirements?.holidayMorning,
+      staffingRequirements?.holidayAfternoon,
+      staffingRequirements?.holidayNight,
+    ]
+      .filter((value): value is ShiftStaffingRequirement => Boolean(value))
+      .map((value) => value.pnNaRequired);
+    const invalidCount = configuredSupportCounts.find(
+      (count) => count % 2 !== 0 || count < minimum * 2,
+    );
+    if (invalidCount !== undefined) {
+      risks.push({
+        id: "special-pn-na-pair-count-conflict",
+        severity: "critical",
+        title: "จำนวน PN/NA ขัดกับกฎการขึ้นเป็นคู่",
+        message: `กำหนด PN/NA รวม ${invalidCount} คน แต่การแบ่งเป็น PN และ NA จำนวนเท่ากันต้องใช้เลขคู่และไม่น้อยกว่า ${minimum * 2} คน`,
+        recommendation: `ปรับจำนวน PN/NA ที่ต้องจัดเป็นเลขคู่และไม่น้อยกว่า ${minimum * 2} คนก่อนส่งข้อมูลให้ GA`,
+      });
+    }
+  }
+}
+
+function normalizeRole(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 function addDailyCapacityRisks(risks: PreflightRisk[], dailyCapacity: DailyCapacity[]) {
@@ -269,10 +523,10 @@ function addTraineeRisks(
     risks.push({
       id: "trainee-capacity",
       severity: "critical",
-      title: "สัดส่วนพยาบาลฝึกหัดอาจทำให้กำลังคนไม่ครบ",
-      message: `${formatExamples(problems)} มีบุคลากรทั่วไปไม่พอ เมื่อแต่ละกะรับพยาบาลฝึกหัดได้ไม่เกิน ${settings.maxTraineePerShift} คน`,
+      title: "สัดส่วนพยาบาลใหม่อาจทำให้กำลังคนไม่ครบ",
+      message: `${formatExamples(problems)} มีบุคลากรทั่วไปไม่พอ เมื่อแต่ละกะรับพยาบาลใหม่ได้ไม่เกิน ${settings.maxTraineePerShift} คน`,
       recommendation:
-        "เพิ่มบุคลากรทั่วไป ย้ายพยาบาลฝึกหัดไปกะอื่น หรือตรวจสอบสถานะพยาบาลฝึกหัดของบุคลากรให้ถูกต้อง",
+        "เพิ่มบุคลากรทั่วไป ย้ายพยาบาลใหม่ไปกะอื่น หรือตรวจสอบสถานะพยาบาลใหม่ของบุคลากรให้ถูกต้อง",
     });
   }
 }
@@ -569,14 +823,36 @@ function normalizeRequirements(
   const morning = requirements?.morning;
   const afternoon = requirements?.afternoon;
   const night = requirements?.night;
-  if (![morning, afternoon, night].every(isValidRequirement)) {
+  const holidayMorning = requirements?.holidayMorning;
+  const holidayAfternoon = requirements?.holidayAfternoon;
+  const holidayNight = requirements?.holidayNight;
+  if (
+    ![
+      morning,
+      afternoon,
+      night,
+      holidayMorning,
+      holidayAfternoon,
+      holidayNight,
+    ].every(isValidRequirement)
+  ) {
     return null;
   }
 
   return {
-    "ช": morning!,
-    "บ": afternoon!,
-    "ด": night!,
+    "ช": mergeRequirementRanges(morning!, holidayMorning!),
+    "บ": mergeRequirementRanges(afternoon!, holidayAfternoon!),
+    "ด": mergeRequirementRanges(night!, holidayNight!),
+  };
+}
+
+function mergeRequirementRanges(
+  weekday: { min: number; max: number },
+  holiday: { min: number; max: number },
+) {
+  return {
+    min: Math.max(weekday.min, holiday.min),
+    max: Math.max(weekday.max, holiday.max),
   };
 }
 

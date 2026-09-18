@@ -42,18 +42,6 @@ export const appNavigationItems = [
     section: "admin",
     roles: adminRoles,
   },
-  {
-    title: "นำเข้าบุคลากร",
-    url: "/admin/import-users",
-    section: "admin",
-    roles: adminRoles,
-  },
-  {
-    title: "สร้างผู้ดูแลระบบ",
-    url: "/admin/create-admin",
-    section: "admin",
-    roles: adminRoles,
-  },
 ] as const satisfies readonly AppNavigationItem[];
 
 export function getVisibleNavigationItems(roles: string[]) {
@@ -63,6 +51,13 @@ export function getVisibleNavigationItems(roles: string[]) {
 }
 
 export function canAccessPath(roles: string[], pathname: string) {
+  if (
+    pathname === "/home/personnel-import" ||
+    pathname.startsWith("/home/personnel-import/")
+  ) {
+    return canRoleAccessItem(roles, adminRoles);
+  }
+
   if (pathname === "/schedule-rounds" || pathname.startsWith("/schedule-rounds/")) {
     return canRoleAccessItem(roles, adminRoles);
   }
@@ -86,6 +81,10 @@ export function canAccessPath(roles: string[], pathname: string) {
 }
 
 export function getPageTitle(pathname: string) {
+  if (pathname === "/home/personnel-import") {
+    return "นำเข้าข้อมูลบุคลากร";
+  }
+
   if (pathname === "/home/account-settings") {
     return "ตั้งค่าบัญชี";
   }

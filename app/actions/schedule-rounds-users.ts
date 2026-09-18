@@ -41,7 +41,9 @@ const managedUserSchema = z
     payPosition: z.string().trim().optional(),
     otRate: z.coerce.number().min(0, "ค่า OT ต้องไม่น้อยกว่า 0"),
     shiftPayRate: z.coerce.number().min(0, "ค่าเวรต้องไม่น้อยกว่า 0"),
-    isTrainee: z.boolean(),
+    staffCategory: z.enum(["RN", "PN", "NA", "OTHER"]),
+    isNewNurse: z.boolean(),
+    canBeInCharge: z.boolean(),
   })
   .superRefine((data, context) => {
     const isCreate = !data.userId;
@@ -210,7 +212,10 @@ export async function saveManagedUserAction(
         otRate: data.otRate.toFixed(2),
         shiftPayRate: data.shiftPayRate.toFixed(2),
         isHead: data.role === "ward_head",
-        isTrainee: data.isTrainee,
+        staffCategory: data.staffCategory,
+        isTrainee: data.isNewNurse,
+        isNewNurse: data.isNewNurse,
+        canBeInCharge: data.canBeInCharge,
       };
 
       const staff = existingStaff
@@ -258,6 +263,9 @@ export async function saveManagedUserAction(
         shiftPayRate: staff.shiftPayRate.toString(),
         isHead: staff.isHead,
         isTrainee: staff.isTrainee,
+        staffCategory: staff.staffCategory,
+        isNewNurse: staff.isNewNurse,
+        canBeInCharge: staff.canBeInCharge,
       });
 
       return user.id;
@@ -298,6 +306,9 @@ async function syncStaffToCurrentCycleSnapshot(
     shiftPayRate: string;
     isHead: boolean;
     isTrainee: boolean;
+    staffCategory: "RN" | "PN" | "NA" | "OTHER";
+    isNewNurse: boolean;
+    canBeInCharge: boolean;
   },
 ) {
   const cycle =
@@ -412,6 +423,9 @@ async function syncStaffToCurrentCycleSnapshot(
     shiftPayRate: input.shiftPayRate,
     isHead: input.isHead,
     isTrainee: input.isTrainee,
+    staffCategory: input.staffCategory,
+    isNewNurse: input.isNewNurse,
+    canBeInCharge: input.canBeInCharge,
   };
 
   if (existingSnapshot) {
@@ -486,6 +500,9 @@ async function getManagedUserRow(userId: string): Promise<UserManagementRow> {
     shiftPayRate: user.staff?.shiftPayRate.toString() ?? "0",
     isHead: user.staff?.isHead ?? role === "ward_head",
     isTrainee: user.staff?.isTrainee ?? false,
+    staffCategory: user.staff?.staffCategory ?? "OTHER",
+    isNewNurse: user.staff?.isNewNurse ?? user.staff?.isTrainee ?? false,
+    canBeInCharge: user.staff?.canBeInCharge ?? false,
   };
 }
 

@@ -7,14 +7,14 @@ import {
   GraduationCapIcon,
   Hospital02Icon,
   SaveIcon,
-  Sun01Icon,
-  SunCloud01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { ReadinessCheckCard } from "@/components/features/schedule-management/ReadinessCheckCard";
 import { PreflightRiskAssessment } from "@/components/features/schedule-management/PreflightRiskAssessment";
 import { ScheduleManagementForm } from "@/components/features/schedule-management/ScheduleManagementForm";
+import { SpecialRulesCard } from "@/components/features/schedule-management/SpecialRulesCard";
+import { StaffingRequirementFields } from "@/components/features/schedule-management/StaffingRequirementFields";
 import { StaffTable as StaffDraftTable } from "@/components/features/schedule-management/StaffTable";
 import { WardSummaryCard } from "@/components/features/schedule-management/WardSummaryCard";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ import type {
   StaffRow,
   WardContext,
 } from "@/lib/schedule-management/types";
+import type { SpecialRuleSetting } from "@/lib/schedule-management/special-rules";
 
 type ScheduleManagementViewProps = {
   ward: WardContext | null;
@@ -62,6 +63,7 @@ type ScheduleManagementViewProps = {
   staffRows: StaffRow[];
   requestRows: RequestSummaryRow[];
   staffingRequirements: StaffingRequirements | null;
+  specialRuleSettings: SpecialRuleSetting[];
   preflightSettings: PreflightSettings;
   sharedStaffUsage: SharedStaffUsage[];
   mode?: "ward_head" | "admin";
@@ -74,6 +76,7 @@ export function ScheduleManagementView({
   staffRows,
   requestRows,
   staffingRequirements,
+  specialRuleSettings,
   preflightSettings,
   sharedStaffUsage,
   mode = "ward_head",
@@ -147,6 +150,7 @@ export function ScheduleManagementView({
       <ScheduleManagementForm
         initialStaffRows={staffRows}
         initialStaffingRequirements={staffingRequirements}
+        initialSpecialRuleSettings={specialRuleSettings}
       >
         <input name="cycleId" type="hidden" value={cycle.id ?? ""} />
         <input name="wardId" type="hidden" value={ward?.id ?? ""} />
@@ -163,6 +167,11 @@ export function ScheduleManagementView({
           />
         </div>
 
+        <SpecialRulesCard
+          initialSettings={specialRuleSettings}
+          wardCode={ward?.code ?? ""}
+        />
+
         <StaffDraftTable
           canManageWard={canManageWard}
           externalStaffCandidates={externalStaffCandidates}
@@ -173,13 +182,8 @@ export function ScheduleManagementView({
         <RequestSummaryTable requestRows={requestRows} ward={ward} />
 
         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
-          <ReadinessCheckCard />
-          <WardSummaryCard
-            requestRows={requestRows}
-            staffRows={staffRows}
-            staffingRequirements={staffingRequirements}
-            ward={ward}
-          />
+          <ReadinessCheckCard cycle={cycle} ward={ward} />
+          <WardSummaryCard cycle={cycle} ward={ward} />
         </div>
         <PreflightRiskAssessment
           cycle={cycle}
@@ -259,32 +263,17 @@ function StaffingRequirementsCard({
           </span>
         ) : null}
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StaffingCard
-          title="เวรดึก"
-          icon={Sun01Icon}
-          namePrefix="night"
-          className="bg-[#DEDBFF]"
-          min={staffingRequirements?.night?.min}
-          max={staffingRequirements?.night?.max}
-        />
-        <StaffingCard
-          title="เวรเช้า"
-          icon={Sun01Icon}
-          namePrefix="morning"
-          className="bg-[#FFFAD4]"
-          min={staffingRequirements?.morning?.min}
-          max={staffingRequirements?.morning?.max}
-        />
-        <StaffingCard
-          title="เวรบ่าย"
-          icon={SunCloud01Icon}
-          namePrefix="afternoon"
-          className="bg-[#D7EFFB]"
-          min={staffingRequirements?.afternoon?.min}
-          max={staffingRequirements?.afternoon?.max}
-        />
-      </div>
+      <StaffingRequirementFields
+        className="mt-4"
+        title="วันราชการ"
+        requirements={staffingRequirements}
+      />
+      <StaffingRequirementFields
+        className="mt-6 border-t pt-6"
+        title="วันหยุด"
+        requirements={staffingRequirements}
+        holiday
+      />
     </section>
   );
 }
@@ -300,7 +289,7 @@ export function StaffTable({ canManageWard, staffRows, ward }: StaffTableProps) 
     <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
       <div className="flex flex-col gap-4 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-semibold">3. ข้อมูลบุคลากร</h2>
+          <h2 className="font-semibold">4. ข้อมูลบุคลากร</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {ward
               ? `แสดงข้อมูลบุคลากรในวอร์ด ${formatWardLabel(ward)}`
@@ -473,7 +462,7 @@ function RequestSummaryTable({
       <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-semibold">
-            4. สรุปคำขอลา / วัน off ที่พนักงานส่งมา
+            5. สรุปคำขอลา / วัน off ที่พนักงานส่งมา
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {ward
@@ -548,57 +537,6 @@ function IconBox({ icon }: IconBoxProps) {
   return (
     <div className="flex items-center justify-center rounded-md bg-[#D1F7F7] p-3 text-brand">
       <HugeiconsIcon icon={icon} size={32} />
-    </div>
-  );
-}
-
-type StaffingCardProps = {
-  title: string;
-  icon: typeof Sun01Icon;
-  namePrefix: "morning" | "afternoon" | "night";
-  className: string;
-  min?: number;
-  max?: number;
-};
-
-function StaffingCard({
-  title,
-  icon,
-  namePrefix,
-  className,
-  min,
-  max,
-}: StaffingCardProps) {
-  return (
-    <div className={`${className} space-y-4 rounded-lg p-4`}>
-      <div className="flex items-center gap-2 font-medium">
-        <HugeiconsIcon icon={icon} />
-        {title}
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-muted-foreground">ขั้นต่ำ</Label>
-        <Input
-          name={`${namePrefix}Min`}
-          type="number"
-          min={0}
-          defaultValue={min ?? ""}
-          placeholder="ยังไม่กำหนด"
-          className="bg-white"
-          required
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-muted-foreground">สูงสุด</Label>
-        <Input
-          name={`${namePrefix}Max`}
-          type="number"
-          min={0}
-          defaultValue={max ?? ""}
-          placeholder="ยังไม่กำหนด"
-          className="bg-white"
-          required
-        />
-      </div>
     </div>
   );
 }

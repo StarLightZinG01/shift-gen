@@ -23,6 +23,7 @@ import type {
   StaffingRequirements,
   StaffRow,
 } from "@/lib/schedule-management/types";
+import type { SpecialRuleSetting } from "@/lib/schedule-management/special-rules";
 
 const initialState: ScheduleManagementActionState = {
   ok: null,
@@ -34,6 +35,7 @@ type ScheduleManagementFormProps = {
   children: ReactNode;
   initialStaffRows: StaffRow[];
   initialStaffingRequirements: StaffingRequirements | null;
+  initialSpecialRuleSettings: SpecialRuleSetting[];
 };
 
 const ScheduleManagementLiveDataContext =
@@ -43,11 +45,13 @@ export function ScheduleManagementForm({
   children,
   initialStaffRows,
   initialStaffingRequirements,
+  initialSpecialRuleSettings,
 }: ScheduleManagementFormProps) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const [liveData, setLiveData] = useState<LiveScheduleManagementData>({
     staffRows: initialStaffRows,
     staffingRequirements: initialStaffingRequirements,
+    specialRuleSettings: initialSpecialRuleSettings,
   });
   const [state, formAction] = useActionState(
     saveScheduleManagementAction,
@@ -74,7 +78,13 @@ export function ScheduleManagementForm({
     }
 
     const updateLiveData = () => {
-      setLiveData(buildLiveScheduleManagementData(form, initialStaffRows));
+      setLiveData(
+        buildLiveScheduleManagementData(
+          form,
+          initialStaffRows,
+          initialSpecialRuleSettings,
+        ),
+      );
     };
     const handleFormMutation = () => window.setTimeout(updateLiveData, 0);
     const observer = new MutationObserver(handleFormMutation);
@@ -91,7 +101,7 @@ export function ScheduleManagementForm({
       form.removeEventListener("click", handleFormMutation);
       observer.disconnect();
     };
-  }, [initialStaffRows]);
+  }, [initialSpecialRuleSettings, initialStaffRows]);
 
   return (
     <ScheduleManagementLiveDataContext.Provider value={liveData}>

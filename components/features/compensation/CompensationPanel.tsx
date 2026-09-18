@@ -73,7 +73,7 @@ export function CompensationPanel({ data }: CompensationPanelProps) {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Select
-              value={data.scheduleVersionId ?? ""}
+              value={data.selectedVersionOptionId ?? ""}
               disabled={data.versionOptions.length === 0}
               onValueChange={(versionId) => {
                 const params = new URLSearchParams({

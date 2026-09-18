@@ -8,20 +8,16 @@ import {
   Calendar03Icon,
   CheckmarkCircle02Icon,
   Delete02Icon,
-  Edit03Icon,
+  Download01Icon,
   SaveIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 
 import {
-  addAssignmentAction,
-  cancelManualVersionAction,
-  createManualVersionAction,
   deleteScheduleVersionAction,
   publishManualVersionAction,
-  replaceAssignmentStaffAction,
-  updateAssignmentShiftAction,
+  saveManualScheduleAction,
 } from "@/app/actions/manual-schedule";
 import {
   AlertDialog,
@@ -41,7 +37,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { FullScheduleFitTable } from "@/components/features/my-schedule/MyScheduleTable";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -74,8 +72,82 @@ type ManualSchedulePanelProps = {
   data: ManualScheduleData;
 };
 
-const workShiftCodes = ["ด", "ช", "บ"] as const;
+const workShiftCodes = ["ช", "บ", "ด"] as const;
 const noteShiftCodes = ["V", "ว", "ล"] as const;
+
+function cloneManualRows(rows: ManualScheduleRow[]): ManualScheduleRow[] {
+  return rows.map((row) => ({
+    ...row,
+    cells: row.cells.map((cell) => ({
+      ...cell,
+      violations: [...cell.violations],
+    })),
+  }));
+}
+
+function manualCellKey(staffId: string, day: number) {
+  return `${staffId}:${day}`;
+}
+
+function createEmptyManualCell(
+  staff: ManualScheduleStaffOption,
+  day: number,
+): ManualScheduleCell {
+  return {
+    assignmentId: null,
+    staffId: staff.id,
+    staffCode: staff.staffCode,
+    fullName: staff.fullName,
+    day,
+    shiftCode: "0",
+    isOt: false,
+    otShifts: null,
+    isEdited: false,
+    violations: [],
+  };
+}
+
+function createEmptyManualRow(
+  staff: ManualScheduleStaffOption,
+  days: number[],
+): ManualScheduleRow {
+  return {
+    staffId: staff.id,
+    staffCode: staff.staffCode,
+    fullName: staff.fullName,
+    isHead: staff.isHead,
+    payPosition: staff.payPosition,
+    staffCategory: staff.staffCategory,
+    cells: days.map((day) => createEmptyManualCell(staff, day)),
+  };
+}
+
+function compareDraftRows(a: ManualScheduleRow, b: ManualScheduleRow) {
+  if (a.isHead !== b.isHead) {
+    return a.isHead ? -1 : 1;
+  }
+
+  const positionOrder = getDraftPositionOrder(a) - getDraftPositionOrder(b);
+  if (positionOrder !== 0) {
+    return positionOrder;
+  }
+
+  return a.staffCode.localeCompare(b.staffCode, "th", { numeric: true });
+}
+
+function getDraftPositionOrder(row: Pick<ManualScheduleRow, "payPosition" | "staffCategory">) {
+  const position = row.payPosition.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const positions: Record<string, number> = {
+    RNSUC: 0,
+    RNICU: 1,
+    RNANES: 2,
+    RN: 3,
+    PN: 4,
+    NA: 5,
+  };
+
+  return positions[position] ?? positions[row.staffCategory] ?? 6;
+}
 
 export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
   const router = useRouter();
@@ -86,7 +158,24 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
   );
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isCancelEditOpen, setIsCancelEditOpen] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isFullTableOpen, setIsFullTableOpen] = useState(false);
+  const [draftRows, setDraftRows] = useState<ManualScheduleRow[]>(() =>
+    cloneManualRows(data.rows),
+  );
+  const [sourceRows, setSourceRows] = useState(data.rows);
+  const [pendingReasons, setPendingReasons] = useState<Record<string, string>>(
+    {},
+  );
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  if (sourceRows !== data.rows) {
+    setSourceRows(data.rows);
+    setDraftRows(cloneManualRows(data.rows));
+    setPendingReasons({});
+    setHasUnsavedChanges(false);
+    setEditingCell(null);
+  }
 
   const days = useMemo(
     () => Array.from({ length: data.daysInMonth }, (_, index) => index + 1),
@@ -107,19 +196,52 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
     [dayMetas],
   );
   const dailyTotals = useMemo(
-    () => buildDailyTotals(data.rows, days),
-    [data.rows, days],
+    () => buildDailyTotals(draftRows, days),
+    [draftRows, days],
   );
   const summaryByStaffId = useMemo(
     () =>
       new Map(
-        data.rows.map((row) => [row.staffId, summarizeManualRow(row, regularWorkTarget)]),
+        draftRows.map((row) => [row.staffId, summarizeManualRow(row, regularWorkTarget)]),
       ),
-    [data.rows, regularWorkTarget],
+    [draftRows, regularWorkTarget],
   );
   const footerSummary = useMemo(
     () => summarizeAllManualRows(Array.from(summaryByStaffId.values())),
     [summaryByStaffId],
+  );
+
+  function handleExcelDownload() {
+    if (hasUnsavedChanges) {
+      toast.info("กรุณาบันทึกการแก้ไขก่อนดาวน์โหลด Excel");
+      return;
+    }
+    if (!data.version || !data.selectedWardId) {
+      toast.error("ไม่พบตารางเวรสำหรับดาวน์โหลด");
+      return;
+    }
+    const params = new URLSearchParams({
+      versionId: data.version.id,
+      wardId: data.selectedWardId,
+    });
+    window.location.assign(`/home/manual-schedule/export?${params.toString()}`);
+  }
+  const fullTableRows = useMemo(
+    () => draftRows.map((row) => ({
+      id: row.staffId,
+      staffCode: row.staffCode,
+      isCurrentUser: false,
+      shiftsByDay: Object.fromEntries(row.cells.map((cell) => [cell.day, cell.shiftCode])),
+      otByDay: Object.fromEntries(row.cells.map((cell) => [cell.day, cell.isOt])),
+      otShiftsByDay: Object.fromEntries(row.cells.map((cell) => [cell.day, cell.otShifts])),
+    })),
+    [draftRows],
+  );
+  const cellsByKey = useMemo(
+    () => new Map(draftRows.flatMap((row) => row.cells.map((cell) =>
+      [manualCellKey(cell.staffId, cell.day), cell] as const,
+    ))),
+    [draftRows],
   );
 
   function navigateWith(params: Record<string, string | null>) {
@@ -148,35 +270,16 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
     router.push(`${pathname}?${searchParams.toString()}`);
   }
 
-  function handleCreateManualVersion() {
-    if (!data.version?.id) {
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await createManualVersionAction(data.version!.id);
-
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-
-      toast.success(result.message);
-      navigateWith({
-        manualVersionId: result.versionId ?? null,
-        manualWardId: data.selectedWardId,
-      });
-      router.refresh();
-    });
-  }
-
   function handlePublish() {
-    if (!data.version?.id) {
+    if (!data.version?.id || !data.selectedWardId) {
       return;
     }
 
     startTransition(async () => {
-      const result = await publishManualVersionAction(data.version!.id);
+      const result = await publishManualVersionAction(
+        data.version!.id,
+        data.selectedWardId!,
+      );
 
       if (!result.ok) {
         toast.error(result.message);
@@ -189,12 +292,15 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
   }
 
   function handleDeleteVersion() {
-    if (!data.version?.id) {
+    if (!data.version?.id || !data.selectedWardId) {
       return;
     }
 
     startTransition(async () => {
-      const result = await deleteScheduleVersionAction(data.version!.id);
+      const result = await deleteScheduleVersionAction(
+        data.version!.id,
+        data.selectedWardId!,
+      );
 
       if (!result.ok) {
         toast.error(result.message);
@@ -211,27 +317,120 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
     });
   }
 
-  function handleCancelManualVersion() {
-    if (!data.version?.id) {
+  function handleCancelChanges() {
+    setDraftRows(cloneManualRows(data.rows));
+    setPendingReasons({});
+    setHasUnsavedChanges(false);
+    setEditingCell(null);
+    setIsAddOpen(false);
+    toast.success("ยกเลิกการแก้ไขและคืนค่าตารางเดิมแล้ว");
+  }
+
+  function handleSave(publish: boolean) {
+    if (!data.version?.id || !data.selectedWardId) {
       return;
     }
 
     startTransition(async () => {
-      const result = await cancelManualVersionAction(data.version!.id);
+      const result = await saveManualScheduleAction({
+        baseVersionId: data.version!.id,
+        wardId: data.selectedWardId!,
+        assignments: draftRows.flatMap((row) =>
+          row.cells.map((cell) => ({
+            staffId: row.staffId,
+            day: cell.day,
+            shiftCode: cell.shiftCode,
+            otShifts: cell.otShifts,
+            reason: pendingReasons[manualCellKey(row.staffId, cell.day)] ?? "",
+          })),
+        ),
+        publish,
+      });
 
       if (!result.ok) {
         toast.error(result.message);
         return;
       }
 
+      setIsSaveDialogOpen(false);
+      setHasUnsavedChanges(false);
+      setPendingReasons({});
       toast.success(result.message);
-      setIsCancelEditOpen(false);
       navigateWith({
-        manualVersionId: result.versionId ?? null,
+        manualVersionId: result.versionId ?? data.version!.id,
         manualWardId: data.selectedWardId,
       });
       router.refresh();
     });
+  }
+
+  function stageCellChange({
+    sourceCell,
+    targetStaffId,
+    shiftCode,
+    otShifts,
+    reason,
+  }: {
+    sourceCell: ManualScheduleCell;
+    targetStaffId: string;
+    shiftCode: string;
+    otShifts: string | null;
+    reason: string;
+  }) {
+    const normalizedOt = normalizeOtValue(otShifts);
+    const isSameValue =
+      sourceCell.staffId === targetStaffId &&
+      sourceCell.shiftCode === shiftCode &&
+      normalizeOtValue(sourceCell.otShifts) === normalizedOt;
+
+    if (isSameValue) {
+      toast.message("ยังไม่มีข้อมูลที่เปลี่ยนแปลง");
+      return;
+    }
+
+    setDraftRows((currentRows) => {
+      const nextRows = cloneManualRows(currentRows);
+      const sourceRow = nextRows.find((row) => row.staffId === sourceCell.staffId);
+      const source = sourceRow?.cells.find((cell) => cell.day === sourceCell.day);
+
+      if (source && sourceCell.staffId !== targetStaffId) {
+        source.shiftCode = "0";
+        source.isOt = false;
+        source.otShifts = null;
+        source.isEdited = true;
+      }
+
+      let targetRow = nextRows.find((row) => row.staffId === targetStaffId);
+      if (!targetRow) {
+        const staff = data.staffOptions.find((option) => option.id === targetStaffId);
+        if (!staff) {
+          toast.error("ไม่พบบุคลากรที่เลือก");
+          return currentRows;
+        }
+
+        targetRow = createEmptyManualRow(staff, days);
+        nextRows.push(targetRow);
+      }
+
+      const target = targetRow.cells.find((cell) => cell.day === sourceCell.day);
+      if (!target) {
+        return currentRows;
+      }
+
+      target.shiftCode = shiftCode;
+      target.isOt = Boolean(normalizedOt);
+      target.otShifts = normalizedOt;
+      target.isEdited = true;
+
+      return nextRows.sort(compareDraftRows);
+    });
+
+    setPendingReasons((current) => ({
+      ...current,
+      [manualCellKey(targetStaffId, sourceCell.day)]: reason,
+    }));
+    setHasUnsavedChanges(true);
+    setEditingCell(null);
   }
 
   if (!data.version) {
@@ -255,7 +454,7 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
           <div>
             <h2 className="text-xl font-semibold">แก้ไขตารางเวรหลัง GA</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              เลือกเวอร์ชันตารางและวอร์ดที่ต้องการแก้ไข ระบบจะสร้างเวอร์ชัน manual แยกจากผล GA เดิมก่อนเริ่มแก้ไข
+              เลือกเวอร์ชันของวอร์ดนี้แล้วแก้ไขตารางได้ทันที ระบบจะบันทึกเป็นฉบับแก้ไขเมื่อกดบันทึก
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <StatusPill label={data.version.cycleLabel} />
@@ -272,7 +471,7 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[520px]">
+          <div className="w-full lg:max-w-sm">
             <div className="space-y-1.5">
               <Label>เวอร์ชันตาราง</Label>
               <Select
@@ -291,30 +490,6 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
                   {data.versionOptions.map((version) => (
                     <SelectItem key={version.id} value={version.id}>
                       {version.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>วอร์ด</Label>
-              <Select
-                value={data.selectedWardId ?? undefined}
-                onValueChange={(value) =>
-                  navigateWith({
-                    manualVersionId: data.version?.id ?? null,
-                    manualWardId: value,
-                  })
-                }
-              >
-                <SelectTrigger className="h-10 w-full rounded-md bg-white">
-                  <SelectValue placeholder="เลือกวอร์ด" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="max-h-80">
-                  {data.wardOptions.map((ward) => (
-                    <SelectItem key={ward.id} value={ward.id}>
-                      {ward.code} - {ward.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -340,20 +515,10 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
             type="button"
             variant="outline"
             className="rounded-md"
-            disabled={!data.canEdit || !data.version.parentVersionId || isPending}
-            onClick={() => setIsCancelEditOpen(true)}
+            disabled={!hasUnsavedChanges || isPending}
+            onClick={handleCancelChanges}
           >
             ยกเลิกการแก้ไข
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-md"
-            disabled={!data.canCreateManualVersion || isPending}
-            onClick={handleCreateManualVersion}
-          >
-            <HugeiconsIcon icon={Edit03Icon} size={17} strokeWidth={2} />
-            สร้างฉบับแก้ไข
           </Button>
           <Button
             type="button"
@@ -367,37 +532,87 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
           </Button>
           <Button
             type="button"
+            variant="outline"
             className="rounded-md"
-            disabled={!data.canPublish || isPending}
+            disabled={!hasUnsavedChanges || isPending}
+            onClick={() => setIsSaveDialogOpen(true)}
+          >
+            <HugeiconsIcon icon={SaveIcon} size={17} strokeWidth={2} />
+            บันทึก
+          </Button>
+          <Button
+            type="button"
+            className="rounded-md"
+            disabled={!data.canPublish || hasUnsavedChanges || isPending}
             onClick={handlePublish}
           >
             <HugeiconsIcon icon={SaveIcon} size={17} strokeWidth={2} />
-            เผยแพร่ฉบับแก้ไข
+            {data.version?.status === "published"
+              ? "เวอร์ชันหลักของวอร์ด"
+              : "ตั้งเป็นเวอร์ชันหลัก"}
           </Button>
         </div>
       </section>
 
-      {!data.canEdit ? (
-        <section className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <HugeiconsIcon
-            icon={AlertCircleIcon}
-            size={20}
-            strokeWidth={2}
-            className="mt-0.5 shrink-0"
-          />
-          <div>
-            ตารางนี้ยังแก้ไขไม่ได้โดยตรง หากต้องการแก้ไขให้กด “สร้างฉบับแก้ไข”
-            ก่อน ระบบจะคัดลอกตารางเดิมเป็นเวอร์ชัน manual แยกไว้ให้
-          </div>
-        </section>
-      ) : null}
-
       <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex flex-col gap-1 border-b p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b p-5">
+          <div>
           <h3 className="font-semibold">ตารางเวร</h3>
           <p className="text-sm text-muted-foreground">
-            กดช่องวันที่ต้องการเพื่อเปลี่ยนเวร ระบบจะบันทึกประวัติการแก้ไขทุกครั้ง
+            กดช่องวันที่ต้องการเพื่อเปลี่ยนเวร การเปลี่ยนแปลงจะถูกบันทึกเมื่อกดปุ่มบันทึก
           </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 shrink-0 rounded-md"
+              onClick={handleExcelDownload}
+            >
+              <HugeiconsIcon icon={Download01Icon} size={17} strokeWidth={2} />
+              ดาวน์โหลด Excel
+            </Button>
+            <Dialog open={isFullTableOpen} onOpenChange={setIsFullTableOpen}>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" className="h-9 shrink-0 rounded-md">
+                  <HugeiconsIcon icon={Calendar03Icon} size={17} strokeWidth={2} />
+                  ดูตารางเต็ม
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="grid !h-[96dvh] !w-[calc(100dvw-1.5rem)] !max-w-[calc(100dvw-1.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden p-4">
+              <DialogHeader className="pr-10">
+                <DialogTitle>ตารางเวรแบบเต็ม</DialogTitle>
+                <DialogDescription>{data.selectedWardLabel}</DialogDescription>
+              </DialogHeader>
+              <FullScheduleFitTable
+                dayMetas={dayMetas}
+                dailyTotals={dailyTotals}
+                footerSummary={footerSummary}
+                rows={fullTableRows}
+                summaryByStaffId={summaryByStaffId}
+                renderDayCell={(staffId, day) => {
+                  const cell = cellsByKey.get(manualCellKey(staffId, day.day));
+                  return (
+                    <td key={`${staffId}-${day.day}`} className={cn(
+                      "border border-[#DDEBED] p-0.5",
+                      day.isHoliday && "bg-[#F3FBFA]",
+                    )}>
+                      {cell ? <ManualShiftButton
+                        cell={cell}
+                        canEdit={data.canEdit}
+                        compact
+                        onEdit={() => {
+                          setIsFullTableOpen(false);
+                          setEditingCell(cell);
+                        }}
+                      /> : "0"}
+                    </td>
+                  );
+                }}
+              />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <HorizontalScrollArea className="max-h-[620px]" minWidth={1520}>
@@ -505,7 +720,7 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.rows.map((row) => {
+              {draftRows.map((row) => {
                 const summary = summaryByStaffId.get(row.staffId) ?? createEmptyManualSummary();
 
                 return (
@@ -517,8 +732,6 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
                       </div>
                     </TableCell>
                     {row.cells.map((cell) => {
-                      const hasViolation = cell.violations.length > 0;
-                      const hasError = cell.violations.some(isErrorViolation);
                       const dayMeta = dayMetas[cell.day - 1];
 
                       return (
@@ -529,35 +742,11 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
                             dayMeta?.isHoliday && "bg-[#F3FBFA]",
                           )}
                         >
-                          <button
-                            type="button"
-                            disabled={!data.canEdit}
-                            onClick={() => setEditingCell(cell)}
-                            title={formatCellViolationTitle(cell)}
-                            className={cn(
-                              "relative flex h-10 w-full items-center justify-center rounded-md border text-sm font-semibold transition",
-                              cell.shiftCode === "0"
-                                ? "border-slate-200 bg-slate-50 text-slate-400"
-                                : "border-teal-200 bg-teal-50 text-brand hover:bg-teal-100",
-                              hasViolation &&
-                                (hasError
-                                  ? "border-rose-300 bg-rose-50 text-rose-800 ring-1 ring-rose-200 hover:bg-rose-100"
-                                  : "border-amber-300 bg-amber-50 text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100"),
-                              cell.isEdited && "ring-2 ring-amber-300",
-                              data.canEdit && "cursor-pointer hover:border-brand",
-                              !data.canEdit && "cursor-default opacity-80",
-                            )}
-                          >
-                            {formatShiftWithOt(cell.shiftCode, cell.isOt, cell.otShifts)}
-                            {hasViolation ? (
-                              <span
-                                className={cn(
-                                  "absolute right-1 top-1 size-1.5 rounded-full",
-                                  hasError ? "bg-rose-500" : "bg-amber-500",
-                                )}
-                              />
-                            ) : null}
-                          </button>
+                          <ManualShiftButton
+                            cell={cell}
+                            canEdit={data.canEdit}
+                            onEdit={() => setEditingCell(cell)}
+                          />
                         </TableCell>
                       );
                     })}
@@ -645,7 +834,7 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
           </Table>
         </HorizontalScrollArea>
 
-        {data.rows.length === 0 ? (
+        {draftRows.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             ยังไม่มีข้อมูลตารางเวรของวอร์ดนี้
           </div>
@@ -687,78 +876,12 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
             }
           }}
           onSubmit={(shiftCode, staffId, otShifts, reason) => {
-            if (!data.version?.id || !data.selectedWardId) {
-              return;
-            }
-
-            startTransition(async () => {
-              let result:
-                | Awaited<ReturnType<typeof replaceAssignmentStaffAction>>
-                | Awaited<ReturnType<typeof updateAssignmentShiftAction>>
-                | Awaited<ReturnType<typeof addAssignmentAction>>
-                | null = null;
-
-              if (!editingCell.assignmentId) {
-                if (shiftCode === "0") {
-                  toast.message("ยังไม่มีข้อมูลที่เปลี่ยนแปลง");
-                  return;
-                }
-
-                result = await addAssignmentAction({
-                  scheduleVersionId: data.version!.id,
-                  wardId: data.selectedWardId!,
-                  staffId,
-                  day: editingCell.day,
-                  shiftCode,
-                  otShifts,
-                  reason,
-                });
-
-                if (!result.ok) {
-                  toast.error(result.message);
-                  return;
-                }
-              } else if (staffId !== editingCell.staffId) {
-                result = await replaceAssignmentStaffAction({
-                  assignmentId: editingCell.assignmentId!,
-                  newStaffId: staffId,
-                  reason,
-                });
-
-                if (!result.ok) {
-                  toast.error(result.message);
-                  return;
-                }
-              }
-
-              if (
-                editingCell.assignmentId &&
-                (
-                  shiftCode !== editingCell.shiftCode ||
-                  normalizeOtValue(otShifts) !== normalizeOtValue(editingCell.otShifts)
-                )
-              ) {
-                result = await updateAssignmentShiftAction({
-                  assignmentId: editingCell.assignmentId!,
-                  newShiftCode: shiftCode,
-                  otShifts,
-                  reason,
-                });
-
-                if (!result.ok) {
-                  toast.error(result.message);
-                  return;
-                }
-              }
-
-              if (!result) {
-                toast.message("ยังไม่มีข้อมูลที่เปลี่ยนแปลง");
-                return;
-              }
-
-              toast.success(result.message);
-              setEditingCell(null);
-              router.refresh();
+            stageCellChange({
+              sourceCell: editingCell,
+              targetStaffId: staffId,
+              shiftCode,
+              otShifts,
+              reason,
             });
           }}
         />
@@ -770,30 +893,27 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
         disabled={isPending}
         onOpenChange={setIsAddOpen}
         onSubmit={(values) => {
-          if (!data.version?.id || !data.selectedWardId) {
+          const staff = data.staffOptions.find(
+            (option) => option.id === values.staffId,
+          );
+          if (!staff) {
+            toast.error("ไม่พบบุคลากรที่เลือก");
             return;
           }
 
-          startTransition(async () => {
-            const result = await addAssignmentAction({
-              scheduleVersionId: data.version!.id,
-              wardId: data.selectedWardId!,
-              staffId: values.staffId,
-              day: values.day,
-              shiftCode: values.shiftCode,
-              otShifts: values.otShifts,
-              reason: values.reason,
-            });
-
-            if (!result.ok) {
-              toast.error(result.message);
-              return;
-            }
-
-            toast.success(result.message);
-            setIsAddOpen(false);
-            router.refresh();
+          const existingCell = draftRows
+            .find((row) => row.staffId === values.staffId)
+            ?.cells.find((cell) => cell.day === values.day);
+          stageCellChange({
+            sourceCell:
+              existingCell ??
+              createEmptyManualCell(staff, values.day),
+            targetStaffId: values.staffId,
+            shiftCode: values.shiftCode,
+            otShifts: values.otShifts,
+            reason: values.reason,
           });
+          setIsAddOpen(false);
         }}
       />
 
@@ -802,9 +922,9 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>ยืนยันการลบตารางเวร</AlertDialogTitle>
             <AlertDialogDescription>
-              การลบนี้จะลบตารางเวรเวอร์ชัน v{data.version.versionNo} ออกจากระบบ
-              รวมถึงรายการเวร ประวัติการแก้ไข และสรุปค่าตอบแทนที่ผูกกับตารางนี้
-              ไม่สามารถย้อนกลับได้
+              การลบนี้จะลบตารางเวร {data.selectedWardLabel} เวอร์ชัน v
+              {data.version.versionNo} รวมถึงรายการเวรและสรุปค่าตอบแทนของวอร์ดนี้
+              โดยไม่กระทบเวอร์ชันของวอร์ดอื่น และไม่สามารถย้อนกลับได้
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -820,27 +940,81 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={isCancelEditOpen} onOpenChange={setIsCancelEditOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>ยกเลิกการแก้ไขตารางเวร</AlertDialogTitle>
-            <AlertDialogDescription>
-              ระบบจะลบฉบับแก้ไข manual version v{data.version.versionNo} และกลับไปใช้ตารางต้นฉบับ
-              การเปลี่ยนแปลงที่ทำไว้ในฉบับนี้จะหายไป แต่ตารางต้นฉบับจะยังอยู่เหมือนเดิม
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>ไม่ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction
+      <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>บันทึกการแก้ไขตารางเวร</DialogTitle>
+            <DialogDescription>
+              ต้องการเผยแพร่ตารางที่แก้ไขนี้ให้เป็นตารางหลักทันทีหรือไม่
+              หากยังไม่เผยแพร่ ระบบจะบันทึกไว้เป็นฉบับร่างและสามารถเผยแพร่ภายหลังได้
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
               disabled={isPending}
-              onClick={handleCancelManualVersion}
+              onClick={() => setIsSaveDialogOpen(false)}
             >
-              {isPending ? "กำลังยกเลิก..." : "ยืนยันยกเลิกการแก้ไข"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              กลับไปแก้ไข
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => handleSave(false)}
+            >
+              บันทึกอย่างเดียว
+            </Button>
+            <Button
+              type="button"
+              disabled={isPending}
+              onClick={() => handleSave(true)}
+            >
+              {isPending ? "กำลังบันทึก..." : "บันทึกและเผยแพร่"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function ManualShiftButton({ cell, canEdit, onEdit, compact = false }: {
+  cell: ManualScheduleCell;
+  canEdit: boolean;
+  onEdit: () => void;
+  compact?: boolean;
+}) {
+  const hasViolation = cell.violations.length > 0;
+  const hasError = cell.violations.some(isErrorViolation);
+  return (
+    <button
+      type="button"
+      disabled={!canEdit}
+      onClick={onEdit}
+      title={formatCellViolationTitle(cell)}
+      aria-label={`${cell.fullName} วันที่ ${cell.day}: ${formatCellViolationTitle(cell)}`}
+      className={cn(
+        "relative flex w-full items-center justify-center border font-semibold transition",
+        compact ? "min-h-6 rounded-sm px-0.5 py-1 text-[10px]" : "h-10 rounded-md text-sm",
+        cell.shiftCode === "0"
+          ? "border-slate-200 bg-slate-50 text-slate-400"
+          : "border-teal-200 bg-teal-50 text-brand hover:bg-teal-100",
+        hasViolation && (hasError
+          ? "border-rose-300 bg-rose-50 text-rose-800 ring-1 ring-rose-200 hover:bg-rose-100"
+          : "border-amber-300 bg-amber-50 text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100"),
+        cell.isEdited && "ring-2 ring-amber-300",
+        canEdit ? "cursor-pointer hover:border-brand" : "cursor-default opacity-80",
+      )}
+    >
+      {formatShiftWithOt(cell.shiftCode, cell.isOt, cell.otShifts)}
+      {hasViolation ? <span className={cn(
+        "absolute right-0.5 top-0.5 rounded-full",
+        compact ? "size-1" : "size-1.5",
+        hasError ? "bg-rose-500" : "bg-amber-500",
+      )} /> : null}
+    </button>
   );
 }
 

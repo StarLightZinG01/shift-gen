@@ -6,12 +6,92 @@ import { buildScheduleMatrix } from "@/lib/my-schedule/schedule-matrix";
 import type {
   MyScheduleAssignment,
   MyScheduleEmptyData,
+  MyScheduleLoadedData,
   MySchedulePageData,
   MyScheduleStaff,
 } from "@/lib/my-schedule/types";
 import { prisma } from "@/lib/prisma";
 
 const visibleScheduleStatuses = ["published", "draft"] as const;
+
+export async function getWardScheduleExportData({
+  versionId,
+  wardId,
+}: {
+  versionId: string;
+  wardId: string;
+}): Promise<MyScheduleLoadedData | null> {
+  const wardVersion = await prisma.scheduleWardVersion.findFirst({
+    where: {
+      scheduleVersionId: versionId,
+      wardId,
+      status: { notIn: ["generating", "failed"] },
+    },
+    include: {
+      ward: true,
+      scheduleVersion: { include: { cycle: true } },
+    },
+  });
+  if (!wardVersion) return null;
+
+  const [assignments, cycleHolidays] = await Promise.all([
+    prisma.scheduleAssignment.findMany({
+      where: { scheduleVersionId: versionId, wardId },
+      include: { staff: true, ward: true },
+      orderBy: [{ staff: { staffCode: "asc" } }, { workDate: "asc" }],
+    }),
+    prisma.scheduleCycleHoliday.findMany({
+      where: { cycleId: wardVersion.cycleId },
+      select: { holidayDate: true },
+      orderBy: { holidayDate: "asc" },
+    }),
+  ]);
+  if (assignments.length === 0) return null;
+
+  const cycle = wardVersion.scheduleVersion.cycle;
+  const daysInMonth = new Date(
+    normalizeYear(cycle.year),
+    cycle.month,
+    0,
+  ).getDate();
+  const staffRows = buildScheduleMatrix({
+    assignments: assignments.map(toMyScheduleAssignment),
+    staff: buildStaffList(assignments, ""),
+    daysInMonth,
+  });
+
+  return {
+    status: "loaded",
+    currentUserStaffId: "",
+    ward: {
+      id: wardVersion.ward.id,
+      code: wardVersion.ward.code,
+      name: wardVersion.ward.name,
+    },
+    cycle: {
+      id: cycle.id,
+      month: cycle.month,
+      year: cycle.year,
+      monthLabel: formatMonthYear(cycle.month, cycle.year),
+    },
+    selectedVersionId: versionId,
+    versionOptions: [],
+    canManageSchedule: true,
+    daysInMonth,
+    holidayDays: cycleHolidays.map((item) => item.holidayDate.getUTCDate()),
+    staffRows,
+    crossWardAssignments: [],
+    summary: {
+      myShiftCount: 0,
+      myOffCount: 0,
+      myVacationCount: 0,
+      myLeaveCount: 0,
+      myOtCount: 0,
+      estimatedPayAmount: 0,
+    },
+    compensationSummary: buildWardCompensationSummary(staffRows),
+  };
+}
 
 export async function getMySchedulePageData({
   session,
@@ -51,25 +131,26 @@ export async function getMySchedulePageData({
     );
   }
 
-  const versions = await prisma.scheduleVersion.findMany({
+  const wardVersions = await prisma.scheduleWardVersion.findMany({
     where: {
+      wardId: staff.homeWardId,
       status: {
         in: [...visibleScheduleStatuses],
       },
-      assignments: {
-        some: {
-          wardId: staff.homeWardId,
-        },
-      },
+      scheduleVersion: { assignments: { some: { wardId: staff.homeWardId } } },
     },
     include: {
-      cycle: true,
+      scheduleVersion: { include: { cycle: true } },
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: { versionNo: "desc" },
     take: 12,
   });
+  const versions = wardVersions.map((item) => ({
+    ...item.scheduleVersion,
+    versionNo: item.versionNo,
+    status: item.status,
+    createdAt: item.createdAt,
+  }));
 
   if (versions.length === 0) {
     return emptyData(
@@ -88,6 +169,20 @@ export async function getMySchedulePageData({
     selectedVersion.cycle.month,
     0,
   ).getDate();
+  const publishedCycleWardVersions = await prisma.scheduleWardVersion.findMany({
+    where: {
+      cycleId: selectedVersion.cycleId,
+      status: "published",
+      NOT: { wardId: staff.homeWardId },
+    },
+    select: { scheduleVersionId: true },
+  });
+  const activeCycleVersionIds = Array.from(
+    new Set([
+      selectedVersion.id,
+      ...publishedCycleWardVersions.map((item) => item.scheduleVersionId),
+    ]),
+  );
 
   const [wardAssignments, myAssignments, availabilityRequests, cycleHolidays] =
     await Promise.all([
@@ -104,7 +199,7 @@ export async function getMySchedulePageData({
       }),
       prisma.scheduleAssignment.findMany({
         where: {
-          scheduleVersionId: selectedVersion.id,
+          scheduleVersionId: { in: activeCycleVersionIds },
           staffId: staff.id,
         },
         include: {
@@ -242,6 +337,7 @@ function buildStaffList(
       isHead: boolean;
       position: string | null;
       payPosition: string | null;
+      staffCategory: string;
       otRate: unknown;
       shiftPayRate: unknown;
     };
@@ -257,6 +353,7 @@ function buildStaffList(
       fullName: assignment.staff.fullName,
       isHead: assignment.staff.isHead,
       payPosition: assignment.staff.payPosition ?? assignment.staff.position ?? "",
+      staffCategory: assignment.staff.staffCategory,
       otRate: Number(assignment.staff.otRate ?? 0),
       shiftPayRate: Number(assignment.staff.shiftPayRate ?? 0),
       isCurrentUser: assignment.staff.id === currentUserStaffId,
@@ -281,6 +378,7 @@ function toMyScheduleAssignment(assignment: {
     isHead: boolean;
     position: string | null;
     payPosition: string | null;
+    staffCategory: string;
     otRate: unknown;
     shiftPayRate: unknown;
   };
@@ -296,6 +394,7 @@ function toMyScheduleAssignment(assignment: {
     fullName: assignment.staff.fullName,
     isHead: assignment.staff.isHead,
     payPosition: assignment.staff.payPosition ?? assignment.staff.position ?? "",
+    staffCategory: assignment.staff.staffCategory,
     otRate: Number(assignment.staff.otRate ?? 0),
     shiftPayRate: Number(assignment.staff.shiftPayRate ?? 0),
     wardId: assignment.wardId,

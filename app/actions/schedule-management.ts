@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { getCurrentSession } from "@/lib/auth/session";
 import { saveScheduleManagementData } from "@/lib/schedule-management/save";
+import {
+  SPECIAL_RULE_DEFINITIONS,
+  type SpecialRuleSetting,
+} from "@/lib/schedule-management/special-rules";
 
 type StaffRowType = "home" | "new" | "external";
 export type ScheduleManagementActionState = {
@@ -13,29 +17,29 @@ export type ScheduleManagementActionState = {
   submittedAt: number;
 };
 
-const staffingRequirementSchema = z
+const shiftRequirementSchema = z
   .object({
-    cycleId: z.string().uuid("ไม่พบรอบจัดตารางที่ถูกต้อง"),
-    wardId: z.string().uuid("ไม่พบวอร์ดที่ถูกต้อง"),
-    morningMin: z.coerce.number().int().min(0),
-    morningMax: z.coerce.number().int().min(0),
-    afternoonMin: z.coerce.number().int().min(0),
-    afternoonMax: z.coerce.number().int().min(0),
-    nightMin: z.coerce.number().int().min(0),
-    nightMax: z.coerce.number().int().min(0),
+    min: z.coerce.number().int().min(0),
+    max: z.coerce.number().int().min(0),
+    rnRequired: z.coerce.number().int().min(0),
+    pnNaRequired: z.coerce.number().int().min(0),
+    requiresIncharge: z.boolean(),
   })
-  .refine((data) => data.morningMin <= data.morningMax, {
-    message: "กำลังคนเวรเช้าต้องมีขั้นต่ำไม่เกินสูงสุด",
-    path: ["morningMin"],
-  })
-  .refine((data) => data.afternoonMin <= data.afternoonMax, {
-    message: "กำลังคนเวรบ่ายต้องมีขั้นต่ำไม่เกินสูงสุด",
-    path: ["afternoonMin"],
-  })
-  .refine((data) => data.nightMin <= data.nightMax, {
-    message: "กำลังคนเวรดึกต้องมีขั้นต่ำไม่เกินสูงสุด",
-    path: ["nightMin"],
+  .refine((data) => data.min <= data.max, {
+    message: "กำลังคนขั้นต่ำต้องไม่เกินจำนวนสูงสุด",
+    path: ["min"],
   });
+
+const staffingRequirementSchema = z.object({
+  cycleId: z.string().uuid("ไม่พบรอบจัดตารางที่ถูกต้อง"),
+  wardId: z.string().uuid("ไม่พบวอร์ดที่ถูกต้อง"),
+  morning: shiftRequirementSchema,
+  afternoon: shiftRequirementSchema,
+  night: shiftRequirementSchema,
+  holidayMorning: shiftRequirementSchema,
+  holidayAfternoon: shiftRequirementSchema,
+  holidayNight: shiftRequirementSchema,
+});
 
 export async function saveScheduleManagementAction(
   _prevState: ScheduleManagementActionState,
@@ -51,12 +55,12 @@ export async function saveScheduleManagementAction(
     const parsed = staffingRequirementSchema.safeParse({
       cycleId: formData.get("cycleId"),
       wardId: formData.get("wardId"),
-      morningMin: formData.get("morningMin"),
-      morningMax: formData.get("morningMax"),
-      afternoonMin: formData.get("afternoonMin"),
-      afternoonMax: formData.get("afternoonMax"),
-      nightMin: formData.get("nightMin"),
-      nightMax: formData.get("nightMax"),
+      morning: parseShiftRequirement(formData, "morning"),
+      afternoon: parseShiftRequirement(formData, "afternoon"),
+      night: parseShiftRequirement(formData, "night"),
+      holidayMorning: parseShiftRequirement(formData, "holidayMorning"),
+      holidayAfternoon: parseShiftRequirement(formData, "holidayAfternoon"),
+      holidayNight: parseShiftRequirement(formData, "holidayNight"),
     });
 
     if (!parsed.success) {
@@ -75,19 +79,14 @@ export async function saveScheduleManagementAction(
       userId: session.userId,
       staffRows: parseStaffRows(formData),
       staffingRequirements: {
-        morning: {
-          min: parsed.data.morningMin,
-          max: parsed.data.morningMax,
-        },
-        afternoon: {
-          min: parsed.data.afternoonMin,
-          max: parsed.data.afternoonMax,
-        },
-        night: {
-          min: parsed.data.nightMin,
-          max: parsed.data.nightMax,
-        },
+        morning: parsed.data.morning,
+        afternoon: parsed.data.afternoon,
+        night: parsed.data.night,
+        holidayMorning: parsed.data.holidayMorning,
+        holidayAfternoon: parsed.data.holidayAfternoon,
+        holidayNight: parsed.data.holidayNight,
       },
+      specialRuleSettings: parseSpecialRuleSettings(formData),
     });
 
     revalidatePath("/home/schedule-management");
@@ -107,6 +106,42 @@ export async function saveScheduleManagementAction(
       submittedAt: Date.now(),
     };
   }
+}
+
+function parseSpecialRuleSettings(formData: FormData): SpecialRuleSetting[] {
+  return SPECIAL_RULE_DEFINITIONS.map((definition) => {
+    const enabled =
+      formData.get(`specialRule.${definition.ruleKey}.enabled`) === "true";
+    const parameters = Object.fromEntries(
+      definition.parameterFields.map((field) => {
+        const raw = formData.get(
+          `specialRule.${definition.ruleKey}.${field.key}`,
+        );
+        const value = raw === null ? definition.defaults[field.key] : Number(raw);
+
+        if (!Number.isFinite(value) || value < field.min) {
+          throw new Error(`${field.label} ต้องไม่น้อยกว่า ${field.min}`);
+        }
+
+        return [field.key, Math.trunc(value)];
+      }),
+    );
+
+    return { ruleKey: definition.ruleKey, enabled, parameters };
+  });
+}
+
+function parseShiftRequirement(formData: FormData, prefix: string) {
+  const rnRequired = formData.get(`${prefix}RnRequired`);
+  const pnNaRequired = formData.get(`${prefix}PnNaRequired`);
+  const requiredStaff = Number(rnRequired) + Number(pnNaRequired);
+  return {
+    min: requiredStaff,
+    max: requiredStaff,
+    rnRequired,
+    pnNaRequired,
+    requiresIncharge: formData.get(`${prefix}RequiresIncharge`) === "true",
+  };
 }
 
 function parseStaffRows(formData: FormData) {
@@ -147,7 +182,10 @@ function parseStaffRows(formData: FormData) {
       otRate,
       shiftPayRate,
       isHead: getBoolean(formData, `staff.${rowKey}.isHead`),
-      isTrainee: getBoolean(formData, `staff.${rowKey}.isTrainee`),
+      staffCategory: getStaffCategory(formData, `staff.${rowKey}.staffCategory`),
+      isNewNurse: getBoolean(formData, `staff.${rowKey}.isNewNurse`),
+      isTrainee: getBoolean(formData, `staff.${rowKey}.isNewNurse`),
+      canBeInCharge: getBoolean(formData, `staff.${rowKey}.canBeInCharge`),
       off: getOptionalString(formData, `staff.${rowKey}.off`) ?? "0",
       vacation: getOptionalString(formData, `staff.${rowKey}.vacation`) ?? "0",
       leave: getOptionalString(formData, `staff.${rowKey}.leave`) ?? "0",
@@ -156,6 +194,14 @@ function parseStaffRows(formData: FormData) {
         getOptionalString(formData, `staff.${rowKey}.preferredShifts`) ?? "0",
     };
   });
+}
+
+function getStaffCategory(
+  formData: FormData,
+  key: string,
+): "RN" | "PN" | "NA" | "OTHER" {
+  const value = getOptionalString(formData, key);
+  return value === "RN" || value === "PN" || value === "NA" ? value : "OTHER";
 }
 
 function getStaffRowType(formData: FormData, rowKey: string): StaffRowType {

@@ -1,6 +1,10 @@
 "use client";
 
-import { Alert02Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  ArrowDown01Icon,
+  InformationCircleIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { useScheduleManagementLiveData } from "@/components/features/schedule-management/ScheduleManagementForm";
@@ -29,6 +33,7 @@ export function PreflightRiskAssessment({
     staffingRequirements: liveData.staffingRequirements,
     settings,
     sharedStaffUsage,
+    specialRuleSettings: liveData.specialRuleSettings,
   });
 
   if (risks.length === 0) {
@@ -39,11 +44,11 @@ export function PreflightRiskAssessment({
   const warningCount = risks.length - criticalCount;
 
   return (
-    <section
+    <details
       aria-live="polite"
-      className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm"
+      className="group overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm"
     >
-      <div className="flex flex-col gap-3 border-b border-amber-100 bg-amber-50/70 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+      <summary className="flex cursor-pointer list-none flex-col gap-3 bg-amber-50/70 px-6 py-5 [&::-webkit-details-marker]:hidden sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
             <HugeiconsIcon icon={Alert02Icon} size={19} strokeWidth={2} />
@@ -68,10 +73,19 @@ export function PreflightRiskAssessment({
               ควรตรวจสอบ {warningCount} รายการ
             </span>
           ) : null}
+          <span className="flex items-center gap-1.5 self-center text-xs font-semibold text-amber-900">
+            <span className="hidden sm:inline">ดูรายละเอียด</span>
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              size={18}
+              strokeWidth={2}
+              className="transition-transform duration-200 group-open:rotate-180"
+            />
+          </span>
         </div>
-      </div>
+      </summary>
 
-      <div className="max-h-[520px] divide-y overflow-y-auto">
+      <div className="max-h-[520px] divide-y overflow-y-auto border-t border-amber-100">
         {risks.map((risk) => {
           const critical = risk.severity === "critical";
           return (
@@ -117,6 +131,6 @@ export function PreflightRiskAssessment({
           );
         })}
       </div>
-    </section>
+    </details>
   );
 }

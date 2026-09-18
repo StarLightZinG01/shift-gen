@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import {
   Calendar03Icon,
@@ -100,7 +101,7 @@ function UserHomeDashboard({ data }: { data: HomeUserDashboardData }) {
           </div>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[296px_minmax(0,1fr)]">
+        <section className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
           <TodayShiftCard data={data} />
           <UpcomingDaysCard
             monthLabel={data.monthLabel}
@@ -180,37 +181,66 @@ function AdminHomeDashboard({ data }: { data: HomeAdminDashboardData }) {
 }
 
 function TodayShiftCard({ data }: { data: HomeUserDashboardData }) {
+  const { todayShift } = data;
+  const shifts = todayShift.hasSchedule ? todayShift.shifts : ["off"];
+  const isCombo = todayShift.hasSchedule && shifts.length > 1;
+  const shiftNames = splitToMatch(todayShift.shiftName, shifts.length);
+  const shiftTimes = splitToMatch(todayShift.time, shifts.length);
+
   return (
     <div className="rounded-3xl bg-brand p-7 text-white shadow-[0_16px_35px_rgba(0,133,133,0.24)]">
-      <p className="text-base font-medium text-white/90">
-        {data.todayShift.label}
-      </p>
-
-      <div className="mt-4 flex items-center gap-5">
-        <div className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-[#FFF2C2] text-[#B46A00]">
-          <HugeiconsIcon
-            icon={data.todayShift.hasSchedule ? Sun01Icon : Coffee01Icon}
-            size={34}
-            strokeWidth={1.7}
-          />
-        </div>
-        <div>
-          <div className="flex items-end gap-2">
-            <p className="text-4xl font-bold leading-none">
-              {data.todayShift.shiftName}
-            </p>
-            <p className="pb-1 text-base font-semibold text-white/85">
-              {data.todayShift.ward}
-            </p>
-          </div>
-          <p className="mt-1 text-sm font-medium text-white/85">
-            {data.todayShift.time}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-base font-medium text-white/90">{todayShift.label}</p>
+        {isCombo ? (
+          <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/90">
+            เวรควบ
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        {data.todayShift.summary.map((item) => (
+      {isCombo ? (
+        <div className="mt-5">
+          <div className="flex items-start">
+            {shifts.map((shift, index) => (
+              <Fragment key={`${shift}-${index}`}>
+                {index > 0 ? <ShiftConnector /> : null}
+                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+                  <div className="flex size-14 items-center justify-center rounded-full bg-[#FFF2C2] text-[#B46A00]">
+                    <HugeiconsIcon icon={getShiftIcon(shift)} size={26} strokeWidth={1.7} />
+                  </div>
+                  <p className="mt-2 text-lg font-bold leading-none">{shiftNames[index]}</p>
+                  <p className="mt-1 whitespace-nowrap text-xs font-medium text-white/80">
+                    {shiftTimes[index]}
+                  </p>
+                </div>
+              </Fragment>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-sm font-semibold text-white/85">
+            {todayShift.ward}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 flex items-center gap-5">
+          <div className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-[#FFF2C2] text-[#B46A00]">
+            <HugeiconsIcon icon={getShiftIcon(shifts[0])} size={34} strokeWidth={1.7} />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
+              <p className="text-3xl font-bold leading-none">{todayShift.shiftName}</p>
+              {todayShift.hasSchedule ? (
+                <p className="pb-0.5 text-base font-semibold text-white/85">{todayShift.ward}</p>
+              ) : null}
+            </div>
+            {todayShift.time ? (
+              <p className="mt-1 text-sm font-medium text-white/85">{todayShift.time}</p>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        {todayShift.summary.map((item) => (
           <div
             key={item.label}
             className="rounded-xl bg-white/85 px-3 py-2 text-center text-brand"
@@ -222,6 +252,21 @@ function TodayShiftCard({ data }: { data: HomeUserDashboardData }) {
       </div>
     </div>
   );
+}
+
+function ShiftConnector() {
+  return (
+    <div className="flex h-14 w-6 shrink-0 items-center justify-center sm:w-8">
+      <div className="relative h-px w-full bg-white/30">
+        <span className="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" />
+      </div>
+    </div>
+  );
+}
+
+function splitToMatch(text: string, count: number): string[] {
+  const parts = text.split("/").map((part) => part.trim()).filter(Boolean);
+  return parts.length === count ? parts : Array.from({ length: count }, () => text);
 }
 
 function UpcomingDaysCard({
@@ -272,11 +317,15 @@ function UpcomingDaysCard({
             <p className="mt-2 text-2xl font-bold leading-none text-black">
               {day.date}
             </p>
-            <div
-              className={`mt-2 flex size-6 items-center justify-center rounded-full ${getShiftTone(day.shift)}`}
-              title={day.shiftLabel}
-            >
-              <HugeiconsIcon icon={getShiftIcon(day.shift)} size={15} />
+            <div className="mt-2 flex min-h-6 items-center justify-center gap-1" title={day.shiftLabel}>
+              {(day.shifts.length > 0 ? day.shifts : ["off"]).map((shift) => (
+                <span
+                  key={shift}
+                  className={`flex size-6 items-center justify-center rounded-full ${getShiftTone(shift)}`}
+                >
+                  <HugeiconsIcon icon={getShiftIcon(shift)} size={15} />
+                </span>
+              ))}
             </div>
           </div>
         ))}

@@ -33,6 +33,7 @@ export function buildScheduleMatrix({
         fullName: assignment.fullName,
         isHead: assignment.isHead,
         payPosition: assignment.payPosition,
+        staffCategory: assignment.staffCategory,
         otRate: assignment.otRate,
         shiftPayRate: assignment.shiftPayRate,
         isCurrentUser: false,
@@ -65,7 +66,26 @@ function compareStaffRows(a: MyScheduleStaffRow, b: MyScheduleStaffRow) {
     return a.isHead ? -1 : 1;
   }
 
-  return a.staffCode.localeCompare(b.staffCode);
+  const positionOrder = getPositionOrder(a) - getPositionOrder(b);
+  if (positionOrder !== 0) {
+    return positionOrder;
+  }
+
+  return a.staffCode.localeCompare(b.staffCode, "th", { numeric: true });
+}
+
+function getPositionOrder(row: Pick<MyScheduleStaffRow, "payPosition" | "staffCategory">) {
+  const position = row.payPosition.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const positions: Record<string, number> = {
+    RNSUC: 0,
+    RNICU: 1,
+    RNANES: 2,
+    RN: 3,
+    PN: 4,
+    NA: 5,
+  };
+
+  return positions[position] ?? positions[row.staffCategory] ?? 6;
 }
 
 function buildEmptyDayMap<T>(daysInMonth: number, value: T): Record<number, T> {

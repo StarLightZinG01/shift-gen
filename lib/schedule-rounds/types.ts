@@ -144,6 +144,7 @@ export type AdminUserSummary = {
 };
 
 export type UserManagementRole = "nurse" | "ward_head" | "admin";
+export type StaffCategory = "RN" | "PN" | "NA" | "OTHER";
 
 export type UserManagementWard = {
   id: string;
@@ -170,6 +171,9 @@ export type UserManagementRow = {
   shiftPayRate: string;
   isHead: boolean;
   isTrainee: boolean;
+  staffCategory: StaffCategory;
+  isNewNurse: boolean;
+  canBeInCharge: boolean;
 };
 
 export type UserManagementData = {
