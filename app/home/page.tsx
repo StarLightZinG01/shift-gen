@@ -1,4 +1,4 @@
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { getHomeDashboardData } from "@/lib/home/queries";
 
 import { HomeDashboard } from "@/components/features/home/HomeDashboard";

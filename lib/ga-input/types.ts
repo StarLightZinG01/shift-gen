@@ -29,6 +29,7 @@ export type GaInput = {
   penalties: GaPenaltiesInput;
   ga: GaSettingsInput;
   custom_rules: GaCustomRuleInput[];
+  readinessWarnings?: string[];
   validation: GaInputValidation;
 };
 

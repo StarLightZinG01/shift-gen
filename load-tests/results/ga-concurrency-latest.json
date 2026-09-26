@@ -1,0 +1,447 @@
+{
+  "startedAt": "2026-09-24T13:22:04.713Z",
+  "target": {
+    "baseUrl": "http://localhost:3100",
+    "database": "shift_gen_loadtest_20260924",
+    "cycleId": "9b3bdc0a-a5d4-40fe-8a09-764960c0af37",
+    "wardId": "1cfb482a-847f-4698-8619-2dbbbf0a03a9"
+  },
+  "actionId": "405ef811102646f0da3a45d29e2c5c11c56fbf8fb7",
+  "concurrency": 15,
+  "rounds": [
+    {
+      "round": 1,
+      "elapsedMs": 640,
+      "passed": false,
+      "created": {
+        "batches": 0,
+        "runs": 0,
+        "scheduleVersions": 0,
+        "wardVersions": 0
+      },
+      "responseSummary": {
+        "success": 0,
+        "rejected": 15,
+        "invalid": 0,
+        "httpStatuses": {
+          "200": 15
+        },
+        "resultMessages": {
+          "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`": 15
+        }
+      },
+      "responses": [
+        {
+          "requestNo": 1,
+          "elapsedMs": 635,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 2,
+          "elapsedMs": 625,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 3,
+          "elapsedMs": 623,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 4,
+          "elapsedMs": 622,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 5,
+          "elapsedMs": 626,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 6,
+          "elapsedMs": 627,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 7,
+          "elapsedMs": 626,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 8,
+          "elapsedMs": 625,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 9,
+          "elapsedMs": 627,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 10,
+          "elapsedMs": 621,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 11,
+          "elapsedMs": 622,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 12,
+          "elapsedMs": 623,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 13,
+          "elapsedMs": 624,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 14,
+          "elapsedMs": 625,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 15,
+          "elapsedMs": 625,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "elapsedMs": 274,
+      "passed": false,
+      "created": {
+        "batches": 0,
+        "runs": 0,
+        "scheduleVersions": 0,
+        "wardVersions": 0
+      },
+      "responseSummary": {
+        "success": 0,
+        "rejected": 15,
+        "invalid": 0,
+        "httpStatuses": {
+          "200": 15
+        },
+        "resultMessages": {
+          "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`": 15
+        }
+      },
+      "responses": [
+        {
+          "requestNo": 1,
+          "elapsedMs": 269,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 2,
+          "elapsedMs": 269,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 3,
+          "elapsedMs": 270,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 4,
+          "elapsedMs": 274,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 5,
+          "elapsedMs": 271,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 6,
+          "elapsedMs": 272,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 7,
+          "elapsedMs": 269,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 8,
+          "elapsedMs": 273,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 9,
+          "elapsedMs": 273,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 10,
+          "elapsedMs": 272,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 11,
+          "elapsedMs": 269,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 12,
+          "elapsedMs": 272,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 13,
+          "elapsedMs": 271,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 14,
+          "elapsedMs": 270,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 15,
+          "elapsedMs": 269,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "elapsedMs": 267,
+      "passed": false,
+      "created": {
+        "batches": 0,
+        "runs": 0,
+        "scheduleVersions": 0,
+        "wardVersions": 0
+      },
+      "responseSummary": {
+        "success": 0,
+        "rejected": 15,
+        "invalid": 0,
+        "httpStatuses": {
+          "200": 15
+        },
+        "resultMessages": {
+          "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`": 15
+        }
+      },
+      "responses": [
+        {
+          "requestNo": 1,
+          "elapsedMs": 267,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 2,
+          "elapsedMs": 262,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 3,
+          "elapsedMs": 265,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 4,
+          "elapsedMs": 267,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 5,
+          "elapsedMs": 265,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 6,
+          "elapsedMs": 260,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 7,
+          "elapsedMs": 261,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 8,
+          "elapsedMs": 266,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 9,
+          "elapsedMs": 262,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 10,
+          "elapsedMs": 263,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 11,
+          "elapsedMs": 262,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 12,
+          "elapsedMs": 265,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 13,
+          "elapsedMs": 266,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 14,
+          "elapsedMs": 267,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        },
+        {
+          "requestNo": 15,
+          "elapsedMs": 267,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"zqGmGIITGptWikr50coSq\"}\n1:{\"status\":\"error\",\"message\":\"\\nInvalid `prisma.$queryRaw()` invocation:\\n\\n\\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`\"}\n"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-09-24T13:22:06.422Z",
+  "passed": false
+}

@@ -66,6 +66,7 @@ type ScheduleManagementViewProps = {
   specialRuleSettings: SpecialRuleSetting[];
   preflightSettings: PreflightSettings;
   sharedStaffUsage: SharedStaffUsage[];
+  readinessWarnings: string[];
   mode?: "ward_head" | "admin";
 };
 
@@ -79,6 +80,7 @@ export function ScheduleManagementView({
   specialRuleSettings,
   preflightSettings,
   sharedStaffUsage,
+  readinessWarnings,
   mode = "ward_head",
 }: ScheduleManagementViewProps) {
   const monthYearLabel = formatMonthYear(cycle.month, cycle.year);
@@ -182,7 +184,11 @@ export function ScheduleManagementView({
         <RequestSummaryTable requestRows={requestRows} ward={ward} />
 
         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
-          <ReadinessCheckCard cycle={cycle} ward={ward} />
+          <ReadinessCheckCard
+            cycle={cycle}
+            ward={ward}
+            readinessWarnings={readinessWarnings}
+          />
           <WardSummaryCard cycle={cycle} ward={ward} />
         </div>
         <PreflightRiskAssessment

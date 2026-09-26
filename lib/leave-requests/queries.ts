@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/auth/session";
+import { isRequestWindowOpen } from "@/lib/schedule-rounds/cycle-status";
 
 import type {
   LeaveRequestCycle,
@@ -144,8 +145,9 @@ async function getCurrentLeaveRequestCycle(): Promise<LeaveRequestCycle | null> 
     daysInMonth,
     firstDayOffset,
     trailingEmptyCells: (7 - ((firstDayOffset + daysInMonth) % 7)) % 7,
+    canSubmitRequests: isRequestWindowOpen(cycle),
     requestCloseLabel: cycle.requestCloseDate
-      ? formatDateTime(cycle.requestCloseDate)
+      ? formatDate(cycle.requestCloseDate)
       : "ยังไม่กำหนดวันปิดรับคำขอ",
   };
 }
@@ -189,6 +191,10 @@ function getPageMessage({
     return "บัญชีนี้ยังไม่ได้ผูกกับข้อมูลบุคลากร";
   }
 
+  if (!cycle.canSubmitRequests) {
+    return "ขณะนี้อยู่นอกช่วงเปิดรับคำขอ หรือรอบจัดตารางถูกล็อกแล้ว";
+  }
+
   if (allowedWards.length === 0) {
     return "บัญชีนี้ยังไม่มีวอร์ดที่สามารถปฏิบัติงานได้";
   }
@@ -223,12 +229,11 @@ function formatMonthYear(month: number, year: number) {
   }).format(new Date(toCalendarYear(year), month - 1, 1));
 }
 
-function formatDateTime(date: Date) {
+function formatDate(date: Date) {
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "UTC",
     day: "numeric",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   }).format(date);
 }

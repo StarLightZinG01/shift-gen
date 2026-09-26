@@ -1,4 +1,5 @@
 import { ManualSchedulePanel } from "@/components/features/manual-schedule/ManualSchedulePanel";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { getManualScheduleData } from "@/lib/manual-schedule/queries";
 
 type ManualSchedulePageProps = {
@@ -12,9 +13,11 @@ export default async function ManualSchedulePage({
   searchParams,
 }: ManualSchedulePageProps) {
   const params = await searchParams;
+  const session = await getCurrentSession();
   const data = await getManualScheduleData({
     versionId: params?.manualVersionId,
     wardId: params?.manualWardId,
+    session,
   });
 
   return (

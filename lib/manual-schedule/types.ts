@@ -64,6 +64,7 @@ export type ManualChangeHistoryRow = {
 };
 
 export type CoverageWarning = {
+  id: string;
   day: number;
   shiftCode: string;
   message: string;
@@ -80,6 +81,7 @@ export type ManualScheduleViolation = {
   constraintLabel: string;
   severity: string;
   message: string;
+  highlightCell?: boolean;
 };
 
 export type ManualScheduleData = {

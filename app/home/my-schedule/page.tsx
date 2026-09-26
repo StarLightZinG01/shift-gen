@@ -1,5 +1,5 @@
 import { MyScheduleView } from "@/components/features/my-schedule/MyScheduleView";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { getMySchedulePageData } from "@/lib/my-schedule/queries";
 
 type MySchedulePageProps = {

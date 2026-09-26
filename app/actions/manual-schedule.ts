@@ -2,21 +2,25 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentSession } from "@/lib/auth/session";
-import { recalculateAndSaveCompensation } from "@/lib/compensation/save";
+import { getCurrentSession } from "@/lib/auth/current-session";
+import { recalculateAndSaveCompensationInTransaction } from "@/lib/compensation/save";
+import { validateStoredManualSchedule } from "@/lib/manual-schedule/constraint-validation-data";
 import {
   assertEditableShiftCode,
   splitShiftCode,
 } from "@/lib/manual-schedule/validation";
 import {
   createManualVersionFromParent,
+  type ManualScheduleTransactionClient,
 } from "@/lib/manual-schedule/versioning";
 import { prisma } from "@/lib/prisma";
+import { resolveScheduledCycleStatus } from "@/lib/schedule-rounds/cycle-status";
 
 export type ManualScheduleActionState = {
   ok: boolean;
   message: string;
   versionId?: string;
+  publishBlocked?: boolean;
 };
 
 export type ManualScheduleDraftAssignment = {
@@ -87,29 +91,30 @@ export async function saveManualScheduleAction(params: {
       throw new Error("ไม่พบ version ตารางเวรของวอร์ดนี้");
     }
 
-    const targetVersion =
-      baseWardVersion.source === "manual" &&
-      baseWardVersion.status === "draft" &&
-      baseVersion.wardVersions.length === 1
-        ? baseVersion
-        : await createManualVersionFromParent({
-            parentVersionId: baseVersion.id,
-            wardId: params.wardId,
-            createdBy: session.userId,
-          });
-
-    const previousAssignments = await prisma.scheduleAssignment.findMany({
+    const eligibleStaff = await prisma.staff.findMany({
       where: {
-        scheduleVersionId: targetVersion.id,
-        wardId: params.wardId,
+        id: { in: uniqueStaffIds },
+        OR: [
+          { homeWardId: params.wardId },
+          {
+            externalSelections: {
+              some: {
+                cycleId: baseVersion.cycleId,
+                wardId: params.wardId,
+              },
+            },
+          },
+        ],
       },
+      select: { id: true },
     });
-    const previousByKey = new Map(
-      previousAssignments.map((assignment) => [
-        `${assignment.staffId}:${assignment.workDate.getUTCDate()}`,
-        assignment,
-      ]),
-    );
+
+    if (eligibleStaff.length !== uniqueStaffIds.length) {
+      throw new Error(
+        "พบบุคลากรที่ไม่ได้อยู่ในวอร์ดหรือไม่ได้ถูกเลือกเป็นบุคลากรช่วยในรอบนี้",
+      );
+    }
+
     const nextByKey = new Map(
       normalizedAssignments.map((assignment) => [
         `${assignment.staffId}:${assignment.day}`,
@@ -118,17 +123,29 @@ export async function saveManualScheduleAction(params: {
     );
     const changedAt = new Date();
 
-    await prisma.$transaction(async (tx) => {
-      await tx.scheduleAssignment.deleteMany({
+    const result = await prisma.$transaction(async (tx) => {
+      const manualVersion = await createManualVersionFromParent({
+        tx,
+        parentVersionId: baseVersion.id,
+        wardId: params.wardId,
+        createdBy: session.userId,
+      });
+      const previousAssignments = await tx.scheduleAssignment.findMany({
         where: {
-          scheduleVersionId: targetVersion.id,
+          scheduleVersionId: baseVersion.id,
           wardId: params.wardId,
         },
       });
+      const previousByKey = new Map(
+        previousAssignments.map((assignment) => [
+          `${assignment.staffId}:${assignment.workDate.getUTCDate()}`,
+          assignment,
+        ]),
+      );
 
       await tx.scheduleAssignment.createMany({
         data: normalizedAssignments.map((assignment) => ({
-          scheduleVersionId: targetVersion.id,
+          scheduleVersionId: manualVersion.id,
           staffId: assignment.staffId,
           wardId: params.wardId,
           workDate: new Date(
@@ -149,7 +166,7 @@ export async function saveManualScheduleAction(params: {
       const changeRows = buildManualChangeRows({
         previousByKey,
         nextByKey,
-        scheduleVersionId: targetVersion.id,
+        scheduleVersionId: manualVersion.id,
         wardId: params.wardId,
         changedBy: session.userId,
         changedAt,
@@ -160,22 +177,39 @@ export async function saveManualScheduleAction(params: {
       if (changeRows.length > 0) {
         await tx.scheduleManualChange.createMany({ data: changeRows });
       }
-    });
 
-    await recalculateAndSaveCompensation(targetVersion.id);
+      await recalculateAndSaveCompensationInTransaction(tx, manualVersion.id);
 
-    if (params.publish) {
-      await publishVersion(targetVersion.id, params.wardId, session.userId);
-    }
+      const publishViolations = params.publish
+        ? await validateStoredManualSchedule(tx, manualVersion.id, params.wardId)
+        : [];
+      if (params.publish) {
+        if (publishViolations.length === 0) {
+          await publishVersionInTransaction(
+            tx,
+            manualVersion.id,
+            params.wardId,
+            session.userId,
+            true,
+          );
+        }
+      }
+
+      return { manualVersion, publishViolations };
+    }, { isolationLevel: "Serializable" });
 
     revalidateManualPaths();
+    const publishBlocked = params.publish && result.publishViolations.length > 0;
 
     return {
       ok: true,
-      message: params.publish
-        ? "บันทึกและเผยแพร่ตารางเวรสำเร็จ"
-        : "บันทึกตารางเวรเป็นฉบับร่างสำเร็จ",
-      versionId: targetVersion.id,
+      message: publishBlocked
+        ? `บันทึกเป็นฉบับร่างแล้ว แต่ยังเผยแพร่ไม่ได้: ${formatPublishBlockMessage(result.publishViolations)}`
+        : params.publish
+          ? "บันทึกและเผยแพร่ตารางเวรสำเร็จ"
+          : "บันทึกตารางเวรเป็นฉบับร่างสำเร็จ",
+      versionId: result.manualVersion.id,
+      publishBlocked,
     };
   } catch (error) {
     return actionError(error);
@@ -189,9 +223,10 @@ export async function publishManualVersionAction(
   try {
     const session = await requireManualEditor();
     await assertCanEditWard(session, wardId);
-    await publishVersion(versionId, wardId, session.userId);
-
-    await recalculateAndSaveCompensation(versionId);
+    await prisma.$transaction(async (tx) => {
+      await publishVersionInTransaction(tx, versionId, wardId, session.userId);
+      await recalculateAndSaveCompensationInTransaction(tx, versionId);
+    }, { isolationLevel: "Serializable" });
     revalidateManualPaths();
 
     return {
@@ -204,50 +239,64 @@ export async function publishManualVersionAction(
   }
 }
 
-async function publishVersion(versionId: string, wardId: string, changedBy: string) {
-  const version = await getEditableScheduleVersion(versionId, wardId);
+async function publishVersionInTransaction(
+  tx: ManualScheduleTransactionClient,
+  versionId: string,
+  wardId: string,
+  changedBy: string,
+  constraintsAlreadyValidated = false,
+) {
+  const version = await getEditableScheduleVersion(tx, versionId, wardId);
 
   if (["generating", "failed"].includes(version.wardVersion.status)) {
     throw new Error("ตารางเวอร์ชันนี้ยังไม่พร้อมตั้งเป็นเวอร์ชันหลัก");
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.scheduleWardVersion.updateMany({
-      where: {
-        cycleId: version.cycleId,
-        wardId,
-        status: "published",
-        NOT: { id: version.wardVersion.id },
-      },
-      data: {
-        status: "draft",
-        publishedAt: null,
-      },
-    });
-    await tx.scheduleWardVersion.update({
-      where: { id: version.wardVersion.id },
-      data: {
-        status: "published",
-        publishedAt: new Date(),
-      },
-    });
-    await tx.scheduleCycle.update({
-      where: { id: version.cycleId },
-      data: {
-        status: "published",
-        publishedAt: new Date(),
-      },
-    });
-    await tx.scheduleManualChange.create({
-      data: {
-        scheduleVersionId: versionId,
-        actionType: "publish_version",
-        newWardId: wardId,
-        reason: "ตั้งเป็นเวอร์ชันหลักของวอร์ด",
-        changedBy,
-      },
-    });
+  if (!constraintsAlreadyValidated) {
+    const violations = await validateStoredManualSchedule(tx, versionId, wardId);
+    if (violations.length > 0) {
+      throw new Error(`ยังเผยแพร่ไม่ได้: ${formatPublishBlockMessage(violations)}`);
+    }
+  }
+
+  await tx.scheduleWardVersion.updateMany({
+    where: {
+      cycleId: version.cycleId,
+      wardId,
+      status: "published",
+      NOT: { id: version.wardVersion.id },
+    },
+    data: {
+      status: "draft",
+      publishedAt: null,
+    },
   });
+  await tx.scheduleWardVersion.update({
+    where: { id: version.wardVersion.id },
+    data: {
+      status: "published",
+      publishedAt: new Date(),
+    },
+  });
+  await tx.scheduleManualChange.create({
+    data: {
+      scheduleVersionId: versionId,
+      actionType: "publish_version",
+      newWardId: wardId,
+      reason: "ตั้งเป็นเวอร์ชันหลักของวอร์ด",
+      changedBy,
+    },
+  });
+}
+
+function formatPublishBlockMessage(
+  violations: Array<{ message: string }>,
+) {
+  const firstMessage = violations[0]?.message ?? "ตารางยังมี Constraint ที่ไม่ผ่าน";
+  const remaining = violations.length - 1;
+  return remaining > 0
+    ? `${firstMessage} และอีก ${remaining} รายการ`
+    : firstMessage;
 }
 
 export async function deleteScheduleVersionAction(
@@ -293,10 +342,19 @@ export async function deleteScheduleVersionAction(
           where: { cycleId: wardVersion.scheduleVersion.cycleId, status: "published" },
         });
         if (publishedWardCount === 0) {
-          await tx.scheduleCycle.update({
+          const cycle = await tx.scheduleCycle.findUnique({
             where: { id: wardVersion.scheduleVersion.cycleId },
-            data: { status: "locked", publishedAt: null },
+            select: { requestOpenDate: true, dataLockDate: true },
           });
+          if (cycle) {
+            await tx.scheduleCycle.updateMany({
+              where: { id: wardVersion.scheduleVersion.cycleId, status: "published" },
+              data: {
+                status: resolveScheduledCycleStatus(cycle),
+                publishedAt: null,
+              },
+            });
+          }
         }
       }
     });
@@ -346,8 +404,12 @@ async function assertCanEditWard(session: ManualSession, wardId?: string) {
   throw new Error("หัวหน้าวอร์ดแก้ไขได้เฉพาะวอร์ดหลักของตัวเอง");
 }
 
-async function getEditableScheduleVersion(versionId: string, wardId: string) {
-  const version = await prisma.scheduleVersion.findUnique({
+async function getEditableScheduleVersion(
+  tx: ManualScheduleTransactionClient,
+  versionId: string,
+  wardId: string,
+) {
+  const version = await tx.scheduleVersion.findUnique({
     where: {
       id: versionId,
     },
@@ -551,6 +613,7 @@ function isOtEligibleShift(value: string) {
 
 function revalidateManualPaths() {
   revalidatePath("/schedule-rounds");
+  revalidatePath("/home");
   revalidatePath("/home/manual-schedule");
   revalidatePath("/home/schedule-rounds");
   revalidatePath("/home/my-schedule");

@@ -22,6 +22,7 @@ export type LeaveRequestCycle = {
   daysInMonth: number;
   firstDayOffset: number;
   trailingEmptyCells: number;
+  canSubmitRequests: boolean;
   requestCloseLabel: string;
 };
 

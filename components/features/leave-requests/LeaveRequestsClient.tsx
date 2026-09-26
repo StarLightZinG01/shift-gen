@@ -40,7 +40,9 @@ export function LeaveRequestsClient({
   data,
 }: LeaveRequestsClientProps) {
   const hasSelectableWard = data.allowedWards.length > 0;
-  const canSubmit = Boolean(data.cycle && data.staffId && hasSelectableWard);
+  const canSubmit = Boolean(
+    data.cycle?.canSubmitRequests && data.staffId && hasSelectableWard,
+  );
   const [wardId, setWardId] = useState(data.allowedWards[0]?.id ?? "");
   const [requests, setRequests] = useState<LeaveRequestDraft[]>(
     data.existingRequests,
@@ -155,8 +157,7 @@ export function LeaveRequestsClient({
                 <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                   <HugeiconsIcon icon={CalendarCheckIcon} size={16} />
                   <span>
-                    ส่งก่อนวันที่ <strong className="text-foreground">19</strong>{" "}
-                    เวลา{" "}
+                    ส่งคำขอก่อนวันที่{" "}
                     <strong className="text-foreground">
                       {data.cycle?.requestCloseLabel ?? "-"}
                     </strong>

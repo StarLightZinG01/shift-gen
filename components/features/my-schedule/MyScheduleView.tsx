@@ -7,6 +7,7 @@ import { CrossWardAssignments } from "@/components/features/my-schedule/CrossWar
 import { EmptyScheduleState } from "@/components/features/my-schedule/EmptyScheduleState";
 import { MyScheduleSummary } from "@/components/features/my-schedule/MyScheduleSummary";
 import { MyScheduleTable } from "@/components/features/my-schedule/MyScheduleTable";
+import { SetPrimaryVersionButton } from "@/components/features/my-schedule/SetPrimaryVersionButton";
 import { VersionSelector } from "@/components/features/my-schedule/VersionSelector";
 import { formatWardLabel } from "@/lib/my-schedule/formatters";
 import type { MySchedulePageData } from "@/lib/my-schedule/types";
@@ -25,6 +26,9 @@ export function MyScheduleView({ data }: MyScheduleViewProps) {
   }
 
   const manualScheduleHref = `/home/manual-schedule?manualVersionId=${data.selectedVersionId}&manualWardId=${data.ward.id}`;
+  const selectedVersion = data.versionOptions.find(
+    (version) => version.id === data.selectedVersionId,
+  );
 
   return (
     <main className="container space-y-6 pb-8">
@@ -38,16 +42,23 @@ export function MyScheduleView({ data }: MyScheduleViewProps) {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <VersionSelector
-              options={data.versionOptions}
-              value={data.selectedVersionId}
-            />
             {data.canManageSchedule ? (
-              <Button asChild type="button" className="h-10 rounded-md">
-                <Link href={manualScheduleHref}>
-                  แก้ไขตารางเวรหลัง GA
-                </Link>
-              </Button>
+              <>
+                <VersionSelector
+                  options={data.versionOptions}
+                  value={data.selectedVersionId}
+                />
+                <SetPrimaryVersionButton
+                  versionId={data.selectedVersionId}
+                  wardId={data.ward.id}
+                  isPrimary={selectedVersion?.status === "published"}
+                />
+                <Button asChild type="button" variant="outline" className="h-10 rounded-md">
+                  <Link href={manualScheduleHref}>
+                    แก้ไขตารางเวรหลัง GA
+                  </Link>
+                </Button>
+              </>
             ) : null}
             <Button
               asChild

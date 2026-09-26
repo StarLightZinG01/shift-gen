@@ -138,3 +138,19 @@ test("readiness accepts complete staffing and valid requests", () => {
 
   assert.ok(checks.every((check) => check.status === "passed"));
 });
+
+test("readiness shows inactive-request warnings before passed checks", () => {
+  const checks = buildReadinessChecks({
+    staffRows: [
+      staff("1", "RN-1", "RN", { isHead: true, canBeInCharge: true }),
+      staff("2", "PN-1", "PN"),
+    ],
+    staffingRequirements: allRequirements(1, 1),
+    cycle,
+    ward,
+    externalWarnings: ["บัญชี inactive มีคำขอค้างอยู่"],
+  });
+
+  assert.equal(checks[0]?.status, "warning");
+  assert.equal(checks[0]?.message, "บัญชี inactive มีคำขอค้างอยู่");
+});

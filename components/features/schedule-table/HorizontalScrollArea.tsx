@@ -32,11 +32,6 @@ export function HorizontalScrollArea({
     const horizontalTarget = tableContainer ?? contentScroll;
     horizontalTargetRef.current = horizontalTarget;
 
-    const previousOverflowX = tableContainer?.style.overflowX;
-    if (tableContainer) {
-      tableContainer.style.overflowX = "hidden";
-    }
-
     const updateScrollWidth = () => {
       const tableWidth =
         tableContainer?.querySelector("table")?.scrollWidth ?? 0;
@@ -64,9 +59,6 @@ export function HorizontalScrollArea({
     });
 
     return () => {
-      if (tableContainer) {
-        tableContainer.style.overflowX = previousOverflowX ?? "";
-      }
       horizontalTargetRef.current = null;
       resizeObserver.disconnect();
       mutationObserver.disconnect();
@@ -102,8 +94,8 @@ export function HorizontalScrollArea({
     <div className="min-w-0">
       <div
         ref={contentScrollRef}
-        className={`overflow-y-auto overflow-x-hidden ${className}`}
-        onScroll={() => syncScroll("content")}
+        className={`overflow-y-auto overflow-x-hidden [touch-action:pan-x_pan-y] ${className}`}
+        onScrollCapture={() => syncScroll("content")}
       >
         {children}
       </div>

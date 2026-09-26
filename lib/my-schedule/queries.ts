@@ -1,8 +1,10 @@
 import type { SessionPayload } from "@/lib/auth/session";
 import { calculateCompensationForAssignments } from "@/lib/compensation/calculate";
+import { toAssignmentScopeWhere } from "@/lib/my-schedule/assignment-scopes";
 import { buildWardCompensationSummary } from "@/lib/my-schedule/compensation-summary";
 import { formatMonthYear } from "@/lib/my-schedule/formatters";
 import { buildScheduleMatrix } from "@/lib/my-schedule/schedule-matrix";
+import { calculateActualScheduleSummary } from "@/lib/my-schedule/summary";
 import type {
   MyScheduleAssignment,
   MyScheduleEmptyData,
@@ -11,8 +13,7 @@ import type {
   MyScheduleStaff,
 } from "@/lib/my-schedule/types";
 import { prisma } from "@/lib/prisma";
-
-const visibleScheduleStatuses = ["published", "draft"] as const;
+import { canManageWardScheduleVersions } from "@/lib/schedule-rounds/dashboard-rules";
 
 export async function getWardScheduleExportData({
   versionId,
@@ -131,19 +132,20 @@ export async function getMySchedulePageData({
     );
   }
 
+  const canManageSchedule = canManageWardScheduleVersions(session.roles);
+
   const wardVersions = await prisma.scheduleWardVersion.findMany({
     where: {
       wardId: staff.homeWardId,
-      status: {
-        in: [...visibleScheduleStatuses],
-      },
+      status: canManageSchedule
+        ? { notIn: ["generating", "failed"] }
+        : "published",
       scheduleVersion: { assignments: { some: { wardId: staff.homeWardId } } },
     },
     include: {
       scheduleVersion: { include: { cycle: true } },
     },
     orderBy: { versionNo: "desc" },
-    take: 12,
   });
   const versions = wardVersions.map((item) => ({
     ...item.scheduleVersion,
@@ -162,7 +164,9 @@ export async function getMySchedulePageData({
 
   const sortedVersions = sortVisibleVersions(versions);
   const selectedVersion =
-    sortedVersions.find((version) => version.id === versionId) ??
+    (canManageSchedule
+      ? sortedVersions.find((version) => version.id === versionId)
+      : undefined) ??
     sortedVersions[0];
   const daysInMonth = new Date(
     normalizeYear(selectedVersion.cycle.year),
@@ -175,14 +179,15 @@ export async function getMySchedulePageData({
       status: "published",
       NOT: { wardId: staff.homeWardId },
     },
-    select: { scheduleVersionId: true },
+    select: { scheduleVersionId: true, wardId: true },
   });
-  const activeCycleVersionIds = Array.from(
-    new Set([
-      selectedVersion.id,
-      ...publishedCycleWardVersions.map((item) => item.scheduleVersionId),
-    ]),
-  );
+  const activeAssignmentScopes = toAssignmentScopeWhere([
+    {
+      scheduleVersionId: selectedVersion.id,
+      wardId: staff.homeWardId,
+    },
+    ...publishedCycleWardVersions,
+  ]);
 
   const [wardAssignments, myAssignments, availabilityRequests, cycleHolidays] =
     await Promise.all([
@@ -199,8 +204,8 @@ export async function getMySchedulePageData({
       }),
       prisma.scheduleAssignment.findMany({
         where: {
-          scheduleVersionId: { in: activeCycleVersionIds },
           staffId: staff.id,
+          OR: activeAssignmentScopes,
         },
         include: {
           staff: true,
@@ -241,11 +246,18 @@ export async function getMySchedulePageData({
     daysInMonth,
   });
   const myAssignmentRows = myAssignments.map(toMyScheduleAssignment);
-  const myCompensationAmount = calculateCompensationForAssignments(myAssignments)
+  const myCompensationSummaries = calculateCompensationForAssignments(myAssignments)
     .flatMap((ward) => ward.staffSummaries)
-    .filter((summary) => summary.staffId === staff.id)
-    .reduce((sum, summary) => sum + summary.totalAmount, 0);
-  const requestCounts = countAvailabilityRequests(availabilityRequests);
+    .filter((summary) => summary.staffId === staff.id);
+  const myCompensationAmount = myCompensationSummaries.reduce(
+    (sum, summary) => sum + summary.totalAmount,
+    0,
+  );
+  const actualScheduleSummary = calculateActualScheduleSummary({
+    assignments: myAssignments,
+    requests: availabilityRequests,
+    daysInMonth,
+  });
 
   return {
     status: "loaded",
@@ -270,8 +282,7 @@ export async function getMySchedulePageData({
       label: `${formatMonthYear(version.cycle.month, version.cycle.year)} · v${version.versionNo} · ${formatVersionStatus(version.status)}`,
       status: version.status,
     })),
-    canManageSchedule:
-      session.roles.includes("admin") || session.roles.includes("ward_head"),
+    canManageSchedule,
     daysInMonth,
     holidayDays: cycleHolidays.map((holiday) => holiday.holidayDate.getUTCDate()),
     staffRows,
@@ -279,11 +290,14 @@ export async function getMySchedulePageData({
       (assignment) => assignment.wardId !== staff.homeWardId,
     ),
     summary: {
-      myShiftCount: myAssignmentRows.length,
-      myOffCount: requestCounts.off,
-      myVacationCount: requestCounts.v,
-      myLeaveCount: requestCounts.leave,
-      myOtCount: myAssignmentRows.filter((assignment) => assignment.isOt).length,
+      myShiftCount: actualScheduleSummary.shiftCount,
+      myOffCount: actualScheduleSummary.offCount,
+      myVacationCount: actualScheduleSummary.vacationCount,
+      myLeaveCount: actualScheduleSummary.leaveCount,
+      myOtCount: myCompensationSummaries.reduce(
+        (sum, summary) => sum + summary.otCount,
+        0,
+      ),
       estimatedPayAmount: myCompensationAmount,
     },
     compensationSummary: buildWardCompensationSummary(staffRows),
@@ -294,9 +308,16 @@ function sortVisibleVersions<
   T extends {
     status: string;
     createdAt: Date;
+    cycle: { year: number; month: number };
   },
 >(versions: T[]) {
   return [...versions].sort((a, b) => {
+    const cyclePriority =
+      b.cycle.year - a.cycle.year || b.cycle.month - a.cycle.month;
+    if (cyclePriority !== 0) {
+      return cyclePriority;
+    }
+
     const statusPriority =
       versionStatusPriority(a.status) - versionStatusPriority(b.status);
     if (statusPriority !== 0) {
@@ -312,7 +333,7 @@ function versionStatusPriority(status: string) {
 }
 
 function formatVersionStatus(status: string) {
-  return status === "published" ? "เผยแพร่แล้ว" : "ฉบับร่าง";
+  return status === "published" ? "เวอร์ชันหลัก" : "ฉบับร่าง";
 }
 
 function emptyData(
@@ -406,27 +427,6 @@ function toMyScheduleAssignment(assignment: {
     otShifts: assignment.otShifts,
     payAmount: Number(assignment.payAmount ?? 0),
   };
-}
-
-function countAvailabilityRequests(
-  requests: Array<{
-    requestType: string;
-  }>,
-) {
-  return requests.reduce(
-    (result, request) => {
-      const type = request.requestType.toLowerCase();
-      if (type === "off") {
-        result.off += 1;
-      } else if (type === "v") {
-        result.v += 1;
-      } else if (request.requestType === "ล") {
-        result.leave += 1;
-      }
-      return result;
-    },
-    { off: 0, v: 0, leave: 0 },
-  );
 }
 
 function normalizeYear(year: number) {

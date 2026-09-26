@@ -1,6 +1,8 @@
 import { hashPassword } from "@/lib/auth/password";
+import { syncStaffUserRole } from "@/lib/auth/staff-role-sync";
 import { prisma } from "@/lib/prisma";
 
+import { hasAdminRole } from "./admin-collision";
 import type {
   ImportStaffUsersOptions,
   ImportStaffUsersSummary,
@@ -17,6 +19,8 @@ type ImportOneResult = {
   createdWards: number;
 };
 
+class ImportRowSkippedError extends Error {}
+
 export async function importStaffUsers(
   rows: StaffImportRow[],
   options: ImportStaffUsersOptions = {},
@@ -25,12 +29,14 @@ export async function importStaffUsers(
     totalRows: rows.length,
     successCount: 0,
     failedCount: 0,
+    skippedCount: 0,
     createdUsers: 0,
     updatedUsers: 0,
     createdStaff: 0,
     updatedStaff: 0,
     createdWards: 0,
     errors: [],
+    skipped: [],
   };
   const passwordHashes = await preparePasswordHashes(rows, options);
 
@@ -47,6 +53,15 @@ export async function importStaffUsers(
       summary.updatedStaff += result.updatedStaff ? 1 : 0;
       summary.createdWards += result.createdWards;
     } catch (error) {
+      if (error instanceof ImportRowSkippedError) {
+        summary.skippedCount += 1;
+        summary.skipped.push({
+          rowNumber: row.rowNumber,
+          staffCode: row.staffCode,
+          message: error.message,
+        });
+        continue;
+      }
       summary.failedCount += 1;
       summary.errors.push({
         rowNumber: row.rowNumber,
@@ -97,6 +112,29 @@ async function importOneStaffUser(
   options: ImportStaffUsersOptions,
   preparedPasswordHash?: string,
 ): Promise<ImportOneResult> {
+  const adminAccount = await tx.user.findFirst({
+    where: {
+      OR: [
+        { username: row.staffCode },
+        { employeeCode: row.staffCode },
+        { staff: { is: { staffCode: row.staffCode } } },
+      ],
+      roles: { some: { role: { name: "admin" } } },
+    },
+    select: {
+      username: true,
+      roles: { select: { role: { select: { name: true } } } },
+    },
+  });
+  if (
+    adminAccount &&
+    hasAdminRole(adminAccount.roles.map((assignment) => assignment.role.name))
+  ) {
+    throw new ImportRowSkippedError(
+      `ข้ามแถวนี้ เนื่องจากรหัส ${row.staffCode} ตรงกับบัญชี Admin (${adminAccount.username})`,
+    );
+  }
+
   let createdWards = 0;
   const homeWardResult = await findOrCreateWard(tx, row.homeWard);
   createdWards += homeWardResult.created ? 1 : 0;
@@ -106,12 +144,6 @@ async function importOneStaffUser(
   let updatedUser = false;
 
   if (!row.generatedStaffCode) {
-    const roleName = row.isHead ? "ward_head" : "nurse";
-    const role = await tx.role.upsert({
-      where: { name: roleName },
-      update: {},
-      create: { name: roleName, description: `Imported role: ${roleName}` },
-    });
     const existingUser = await tx.user.findUnique({
       where: { username: row.staffCode },
     });
@@ -129,6 +161,7 @@ async function importOneStaffUser(
         displayName: row.fullName,
         employeeCode: row.staffCode,
         status: "active",
+        sessionVersion: { increment: 1 },
         passwordHash,
       },
       create: {
@@ -142,11 +175,7 @@ async function importOneStaffUser(
     createdUser = !existingUser;
     updatedUser = Boolean(existingUser);
 
-    await tx.userRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId: role.id } },
-      update: {},
-      create: { userId: user.id, roleId: role.id },
-    });
+    await syncStaffUserRole(tx, user.id, row.isHead);
   }
 
   const existingStaff = await tx.staff.findUnique({

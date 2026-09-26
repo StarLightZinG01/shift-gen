@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   getCurrentCycleOrNull,
   getExternalStaffCandidates,
+  getInactiveStaffRequestWarnings,
   getRequestSummaryRows,
   getSchedulePreflightContext,
   getSpecialRuleSettings,
@@ -59,6 +60,7 @@ export default async function WardScheduleDataDetailPage({
     ward.id,
     ward.code,
   );
+  const readinessWarnings = await getInactiveStaffRequestWarnings(cycle.id, ward.id);
 
   return (
     <div className="space-y-4 pb-8">
@@ -75,6 +77,7 @@ export default async function WardScheduleDataDetailPage({
         staffRows={staffRows}
         staffingRequirements={staffingRequirements}
         preflightSettings={preflight.settings}
+        readinessWarnings={readinessWarnings}
         sharedStaffUsage={preflight.sharedStaffUsage}
         specialRuleSettings={specialRuleSettings}
         ward={ward}

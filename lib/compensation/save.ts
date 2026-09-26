@@ -2,8 +2,19 @@ import { calculateCompensationForAssignments } from "@/lib/compensation/calculat
 import type { WardCompensationResult } from "@/lib/compensation/types";
 import { prisma } from "@/lib/prisma";
 
+type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 export async function recalculateAndSaveCompensation(scheduleVersionId: string) {
-  const assignments = await prisma.scheduleAssignment.findMany({
+  return prisma.$transaction((tx) =>
+    recalculateAndSaveCompensationInTransaction(tx, scheduleVersionId),
+  );
+}
+
+export async function recalculateAndSaveCompensationInTransaction(
+  tx: TransactionClient,
+  scheduleVersionId: string,
+) {
+  const assignments = await tx.scheduleAssignment.findMany({
     where: {
       scheduleVersionId,
     },
@@ -15,38 +26,36 @@ export async function recalculateAndSaveCompensation(scheduleVersionId: string) 
 
   const wards = calculateCompensationForAssignments(assignments);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.wardCompensationSummary.deleteMany({
-      where: {
+  await tx.wardCompensationSummary.deleteMany({
+    where: {
+      scheduleVersionId,
+    },
+  });
+
+  for (const ward of wards) {
+    const summary = await tx.wardCompensationSummary.create({
+      data: {
         scheduleVersionId,
+        wardId: ward.wardId,
+        totalOtAmount: ward.totalOtAmount,
+        totalRegularShiftAmount: ward.totalRegularShiftAmount,
+        totalAmount: ward.totalAmount,
       },
     });
 
-    for (const ward of wards) {
-      const summary = await tx.wardCompensationSummary.create({
-        data: {
-          scheduleVersionId,
-          wardId: ward.wardId,
-          totalOtAmount: ward.totalOtAmount,
-          totalRegularShiftAmount: ward.totalRegularShiftAmount,
-          totalAmount: ward.totalAmount,
-        },
+    if (ward.items.length > 0) {
+      await tx.compensationSummaryItem.createMany({
+        data: ward.items.map((item) => ({
+          summaryId: summary.id,
+          category: item.category,
+          staffType: item.staffType,
+          rate: item.rate,
+          quantity: item.quantity,
+          amount: item.amount,
+        })),
       });
-
-      if (ward.items.length > 0) {
-        await tx.compensationSummaryItem.createMany({
-          data: ward.items.map((item) => ({
-            summaryId: summary.id,
-            category: item.category,
-            staffType: item.staffType,
-            rate: item.rate,
-            quantity: item.quantity,
-            amount: item.amount,
-          })),
-        });
-      }
     }
-  });
+  }
 
   return buildResult(scheduleVersionId, wards);
 }

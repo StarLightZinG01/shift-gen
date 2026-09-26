@@ -1,4 +1,4 @@
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { getLeaveRequestPageData } from "@/lib/leave-requests/queries";
 
 import { LeaveRequestsClient } from "@/components/features/leave-requests/LeaveRequestsClient";

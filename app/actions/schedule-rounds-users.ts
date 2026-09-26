@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { hashPassword } from "@/lib/auth/password";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { prisma } from "@/lib/prisma";
 import type {
   UserManagementRole,
@@ -141,6 +141,7 @@ export async function saveManagedUserAction(
               displayName: data.displayName,
               employeeCode,
               status: data.status,
+              sessionVersion: { increment: 1 },
               ...passwordData,
             },
           })

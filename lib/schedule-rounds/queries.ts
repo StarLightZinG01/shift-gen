@@ -1,3 +1,4 @@
+import { requireAdminSession } from "@/lib/auth/current-session";
 import { prisma } from "@/lib/prisma";
 import {
   isActiveGaRunStatus,
@@ -10,6 +11,11 @@ import {
 import { getCompensationSummary } from "@/lib/compensation/queries";
 import { getManualScheduleData } from "@/lib/manual-schedule/queries";
 import { resolveCycleStatus } from "./cycle-status";
+import { toBangkokDateTimeInputValue } from "./round-dates";
+import {
+  isSubmittedPreparationStatus,
+  submittedPreparationStatuses,
+} from "./dashboard-rules";
 
 import type {
   CompensationSummaryData,
@@ -47,6 +53,8 @@ export async function getScheduleRoundsDashboardData({
   manualVersionId?: string;
   manualWardId?: string;
 } = {}): Promise<ScheduleRoundsDashboardData> {
+  const session = await requireAdminSession();
+
   const latestCycle = await prisma.scheduleCycle.findFirst({
     orderBy: [
       {
@@ -90,6 +98,9 @@ export async function getScheduleRoundsDashboardData({
       ? prisma.wardCyclePreparation.count({
           where: {
             cycleId: latestCycle.id,
+            status: {
+              in: [...submittedPreparationStatuses],
+            },
           },
         })
       : Promise.resolve(0),
@@ -110,6 +121,7 @@ export async function getScheduleRoundsDashboardData({
     getManualScheduleData({
       versionId: manualVersionId,
       wardId: manualWardId,
+      session,
     }),
   ]);
 
@@ -431,7 +443,7 @@ function mapScheduleRoundRow(
   holidays: Array<{ date: Date; label: string | null }>,
 ): ScheduleRoundRow {
   const submittedWards = round.preparations.filter((preparation) =>
-    ["submitted", "ready"].includes(preparation.status),
+    isSubmittedPreparationStatus(preparation.status),
   ).length;
   const latestBatch = round.gaRunBatches[0] ?? null;
   const latestChildRun = round.gaRuns[0] ?? null;
@@ -724,6 +736,7 @@ function formatDateTimeLabel(date: Date | null) {
   return new Intl.DateTimeFormat("th-TH", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Asia/Bangkok",
   }).format(date);
 }
 
@@ -732,7 +745,7 @@ function toDateInputValue(date: Date | null) {
 }
 
 function toDateTimeInputValue(date: Date | null) {
-  return date ? date.toISOString().slice(0, 16) : "";
+  return toBangkokDateTimeInputValue(date);
 }
 
 function formatHolidayDateLabels(holidays: Array<{ date: Date; label: string | null }>) {

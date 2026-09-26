@@ -19,6 +19,10 @@ import {
   toNumber,
 } from "./formatters";
 import { MAX_CONSECUTIVE_NIGHTS } from "./constants";
+import {
+  collectInactiveStaffIds,
+  formatInactiveStaffRequestWarning,
+} from "./staff-eligibility";
 import type {
   GaAvailabilityRequestInput,
   GaCustomRuleInput,
@@ -157,11 +161,52 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
     ],
   });
 
+  const referencedStaffIds = Array.from(
+    new Set([
+      ...homeStaff.map((staff) => staff.id),
+      ...cycle.preparations.flatMap((preparation) =>
+        preparation.staffSnapshots.flatMap((snapshot) =>
+          snapshot.staffId ? [snapshot.staffId] : [],
+        ),
+      ),
+      ...cycle.externalStaff.map((selection) => selection.staffId),
+      ...cycle.availabilityRequests.map((request) => request.staffId),
+    ]),
+  );
+  const staffAccountStates = await prisma.staff.findMany({
+    where: { id: { in: referencedStaffIds } },
+    select: {
+      id: true,
+      user: { select: { status: true } },
+    },
+  });
+  const inactiveStaffIds = collectInactiveStaffIds(staffAccountStates);
+  const activeHomeStaff = homeStaff.filter((staff) => !inactiveStaffIds.has(staff.id));
+  const activeExternalStaff = cycle.externalStaff.filter(
+    (selection) => !inactiveStaffIds.has(selection.staffId),
+  );
+  const activeRequests = cycle.availabilityRequests.filter(
+    (request) => !inactiveStaffIds.has(request.staffId),
+  );
+  const inactiveRequestCounts = new Map<string, { code: string; name: string; count: number }>();
+  for (const request of cycle.availabilityRequests) {
+    if (!inactiveStaffIds.has(request.staffId)) continue;
+    const current = inactiveRequestCounts.get(request.staffId);
+    inactiveRequestCounts.set(request.staffId, {
+      code: request.staff.staffCode,
+      name: request.staff.fullName,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+  const readinessWarnings = Array.from(inactiveRequestCounts.values()).map(
+    formatInactiveStaffRequestWarning,
+  );
+
   const staffById = new Map<string, StaffRecord>();
-  for (const staff of homeStaff) {
+  for (const staff of activeHomeStaff) {
     staffById.set(staff.id, staff);
   }
-  for (const selection of cycle.externalStaff) {
+  for (const selection of activeExternalStaff) {
     staffById.set(selection.staff.id, selection.staff);
   }
 
@@ -172,20 +217,25 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
     cycle.preparations.map((preparation) => [preparation.ward.id, preparation.ward]),
   );
 
-  const requests = buildAvailabilityRequests(cycle.availabilityRequests, cycle.year, cycle.month);
+  const requests = buildAvailabilityRequests(activeRequests, cycle.year, cycle.month);
   const specialDaysByStaffCode = buildSpecialDaysByStaffCode(requests);
   const gaStaffByCode = new Map<string, StaffAccumulator>();
 
   const wards: GaWardInput[] = cycle.preparations.map((preparation) => {
-    const fallbackStaff = homeStaff.filter((staff) => staff.homeWardId === preparation.wardId);
+    const fallbackStaff = activeHomeStaff.filter((staff) => staff.homeWardId === preparation.wardId);
     const sourceStaff =
       preparation.staffSnapshots.length > 0 || preparation.submittedAt
-        ? preparation.staffSnapshots.map((snapshot) =>
-            mapSnapshotToWardStaff(snapshot, staffById, wardByCode, wardById),
-          )
+        ? preparation.staffSnapshots
+            .filter(
+              (snapshot) =>
+                snapshot.staffId === null || !inactiveStaffIds.has(snapshot.staffId),
+            )
+            .map((snapshot) =>
+              mapSnapshotToWardStaff(snapshot, staffById, wardByCode, wardById),
+            )
         : fallbackStaff.map((staff) => mapStaffRecordToWardStaff(staff, false));
 
-    const externalStaff = cycle.externalStaff
+    const externalStaff = activeExternalStaff
       .filter((selection) => selection.wardId === preparation.wardId)
       .map((selection) => mapStaffRecordToWardStaff(selection.staff, true, selection.ward.code));
 
@@ -348,6 +398,7 @@ export async function buildGaInput(cycleId: string): Promise<GaInput> {
       repair_elite_every: gaSettings.repairEliteEvery,
     },
     custom_rules: wards.flatMap((ward) => ward.customRules),
+    readinessWarnings,
   };
 
   return {

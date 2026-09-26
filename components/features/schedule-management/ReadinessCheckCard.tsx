@@ -7,12 +7,19 @@ import type { CycleContext, WardContext } from "@/lib/schedule-management/types"
 export function ReadinessCheckCard({
   cycle,
   ward,
+  readinessWarnings,
 }: {
   cycle: CycleContext;
   ward: WardContext | null;
+  readinessWarnings: string[];
 }) {
   const liveData = useScheduleManagementLiveData();
-  const checks = buildReadinessChecks({ ...liveData, cycle, ward });
+  const checks = buildReadinessChecks({
+    ...liveData,
+    cycle,
+    ward,
+    externalWarnings: readinessWarnings,
+  });
 
   return (
     <section className="flex h-full max-h-[520px] min-h-0 flex-col rounded-2xl border bg-white p-5 shadow-sm sm:p-6">

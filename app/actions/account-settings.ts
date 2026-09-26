@@ -4,11 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import {
-  getCurrentSession,
-  setSessionCookie,
-  type SessionPayload,
-} from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
+import { setSessionCookie, type SessionPayload } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 export type AccountActionResult =
@@ -182,6 +179,7 @@ function buildUpdatedSession(
     homeWardId: session.homeWardId,
     homeWardCode: session.homeWardCode,
     isHead: session.isHead,
+    sessionVersion: session.sessionVersion,
   };
 }
 

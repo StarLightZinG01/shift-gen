@@ -5,7 +5,10 @@ const requiredShiftCodes: GaShiftCode[] = ["ช", "บ", "ด"];
 
 export function buildGaRunReadiness(input: GaInput): GaRunReadiness {
   const errors = [...input.validation.errors];
-  const warnings = [...input.validation.warnings];
+  const warnings = [
+    ...input.validation.warnings,
+    ...(input.readinessWarnings ?? []),
+  ];
 
   if (input.wards.length === 0) {
     errors.push("รอบนี้ยังไม่มีวอร์ดสำหรับจัดตาราง");

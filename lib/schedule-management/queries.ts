@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { resolveCycleStatus } from "@/lib/schedule-rounds/cycle-status";
 import { getGaSettingsData } from "@/lib/schedule-rounds/ga-settings";
+import { formatInactiveStaffRequestWarning } from "@/lib/ga-input/staff-eligibility";
 
-import { mockCycle } from "./mock-data";
+import { CURRENT_CYCLE_STATUSES } from "./current-cycle";
 import type {
   CycleContext,
   ExternalStaffCandidate,
@@ -136,11 +137,11 @@ export async function getWardContextById(
   };
 }
 
-export async function getCurrentCycle(): Promise<CycleContext> {
+export async function getCurrentCycle(): Promise<CycleContext | null> {
   const cycle = await prisma.scheduleCycle.findFirst({
     where: {
       status: {
-          in: ["preparing", "draft", "open", "locked"],
+        in: [...CURRENT_CYCLE_STATUSES],
       },
     },
     orderBy: [
@@ -154,7 +155,7 @@ export async function getCurrentCycle(): Promise<CycleContext> {
   });
 
   if (!cycle) {
-    return mockCycle;
+    return null;
   }
 
   const holidays = await getCycleHolidays(cycle.id);
@@ -506,6 +507,40 @@ export async function getRequestSummaryRows(
     requestDate: request.requestDate,
     reason: request.reason ?? "",
   }));
+}
+
+export async function getInactiveStaffRequestWarnings(
+  cycleId: string | null,
+  wardId: string,
+) {
+  if (!cycleId) return [];
+  const staffIds = await getCycleWardStaffIds(cycleId, wardId);
+  if (staffIds.length === 0) return [];
+
+  const inactiveStaff = await prisma.staff.findMany({
+    where: {
+      id: { in: staffIds },
+      user: { is: { status: { not: "active" } } },
+    },
+    select: {
+      id: true,
+      staffCode: true,
+      fullName: true,
+      _count: {
+        select: { availabilityRequests: { where: { cycleId } } },
+      },
+    },
+  });
+
+  return inactiveStaff
+    .filter((staff) => staff._count.availabilityRequests > 0)
+    .map((staff) =>
+      formatInactiveStaffRequestWarning({
+        code: staff.staffCode,
+        name: staff.fullName,
+        count: staff._count.availabilityRequests,
+      }),
+    );
 }
 
 export async function getStaffingRequirements(

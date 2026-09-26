@@ -77,8 +77,8 @@ function EditScheduleRoundForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [month, setMonth] = useState(String(round.month));
-  const [year, setYear] = useState(String(round.year));
+  const month = String(round.month);
+  const year = String(round.year);
   const [requestOpenDate, setRequestOpenDate] = useState(round.requestOpenDate);
   const [requestCloseDate, setRequestCloseDate] = useState(round.requestCloseDate);
   const [dataLockDate, setDataLockDate] = useState(round.dataLockDate);
@@ -140,8 +140,8 @@ function EditScheduleRoundForm({
           <Field label="เดือน">
             <select
               value={month}
-              onChange={(event) => setMonth(event.target.value)}
-              className="h-10 w-full rounded-md border bg-white px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              disabled
+              className="h-10 w-full rounded-md border bg-muted px-3 text-sm shadow-xs"
             >
               {thaiMonths.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -157,9 +157,9 @@ function EditScheduleRoundForm({
               min={2400}
               max={3000}
               value={year}
-              onChange={(event) => setYear(event.target.value)}
+              disabled
               required
-              className="rounded-md bg-white"
+              className="rounded-md bg-muted"
             />
           </Field>
 

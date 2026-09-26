@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { resolveCycleStatus } from "@/lib/schedule-rounds/cycle-status";
+import {
+  isSubmittedPreparationStatus,
+  selectLatestPublishedWardVersion,
+  userVisibleWardVersionStatuses,
+} from "@/lib/schedule-rounds/dashboard-rules";
 import type { SessionPayload } from "@/lib/auth/session";
 import { splitShiftCode } from "@/lib/manual-schedule/validation";
+import { toAssignmentScopeWhere } from "@/lib/my-schedule/assignment-scopes";
+import { countScheduleWorkUnits } from "@/lib/my-schedule/summary";
 
 import type {
   HomeAdminDashboardData,
@@ -21,8 +28,6 @@ type PublishedAssignment = {
     code: string;
   };
 };
-
-const visibleScheduleStatuses = ["published", "draft"] as const;
 
 export async function getHomeDashboardData(
   session: SessionPayload | null,
@@ -74,7 +79,7 @@ async function getAdminHomeDashboardData(
 
   const submittedWards =
     latestCycle?.preparations.filter((preparation) =>
-      ["submitted", "ready"].includes(preparation.status),
+      isSubmittedPreparationStatus(preparation.status),
     ).length ?? 0;
 
   return {
@@ -151,7 +156,7 @@ async function getUserHomeDashboardData(
     ? await prisma.scheduleWardVersion.findMany({
         where: {
           wardId: staff.homeWardId,
-          status: { in: [...visibleScheduleStatuses] },
+          status: { in: [...userVisibleWardVersionStatuses] },
           scheduleVersion: { assignments: { some: { wardId: staff.homeWardId } } },
         },
         include: { scheduleVersion: { include: { cycle: true } } },
@@ -159,7 +164,7 @@ async function getUserHomeDashboardData(
         take: 12,
       })
     : [];
-  const selectedWardVersion = sortVisibleVersions(homeWardVersions)[0] ?? null;
+  const selectedWardVersion = selectLatestPublishedWardVersion(homeWardVersions);
   const selectedVersion = selectedWardVersion
     ? {
         ...selectedWardVersion.scheduleVersion,
@@ -186,21 +191,21 @@ async function getUserHomeDashboardData(
       ? today
       : scheduleMonthStart;
   const nextSevenDaysEnd = addDays(upcomingStart, 7);
-  const activeCycleVersionIds = selectedVersion
-    ? Array.from(
-        new Set(
-          (
-            await prisma.scheduleWardVersion.findMany({
-              where: {
-                cycleId: selectedVersion.cycleId,
-                status: "published",
-                NOT: { wardId: staff!.homeWardId },
-              },
-              select: { scheduleVersionId: true },
-            })
-          ).map((item) => item.scheduleVersionId).concat(selectedVersion.id),
-        ),
-      )
+  const activeAssignmentScopes = selectedVersion
+    ? toAssignmentScopeWhere([
+        {
+          scheduleVersionId: selectedVersion.id,
+          wardId: staff!.homeWardId,
+        },
+        ...(await prisma.scheduleWardVersion.findMany({
+          where: {
+            cycleId: selectedVersion.cycleId,
+            status: "published",
+            NOT: { wardId: staff!.homeWardId },
+          },
+          select: { scheduleVersionId: true, wardId: true },
+        })),
+      ])
     : [];
   const latestCycle = await prisma.scheduleCycle.findFirst({
     orderBy: [
@@ -217,12 +222,8 @@ async function getUserHomeDashboardData(
     staff && selectedVersion
       ? await prisma.scheduleAssignment.findMany({
           where: {
-            scheduleVersionId: { in: activeCycleVersionIds },
             staffId: staff.id,
-            workDate: {
-              gte: scheduleMonthStart,
-              lt: nextScheduleMonthStart,
-            },
+            OR: activeAssignmentScopes,
           },
           include: {
             ward: {
@@ -241,11 +242,11 @@ async function getUserHomeDashboardData(
     staff && selectedVersion
       ? await prisma.scheduleAssignment.findMany({
           where: {
-            scheduleVersionId: { in: activeCycleVersionIds },
             staffId: staff.id,
+            OR: activeAssignmentScopes,
             workDate: {
-              gte: upcomingStart,
-              lt: nextSevenDaysEnd,
+              gte: toDatabaseDate(upcomingStart),
+              lt: toDatabaseDate(nextSevenDaysEnd),
             },
           },
           include: {
@@ -375,7 +376,7 @@ function countActualSchedule({
   let otCount = 0;
 
   for (const assignment of assignments) {
-    const workUnits = countWorkUnits(assignment.shiftCode);
+    const workUnits = countScheduleWorkUnits(assignment.shiftCode);
 
     if (workUnits > 0 || isNonOffNote(assignment.shiftCode)) {
       nonOffDays.add(assignment.workDate.getDate());
@@ -390,20 +391,6 @@ function countActualSchedule({
     offDays: Math.max(daysInMonth - nonOffDays.size, 0),
     otCount,
   };
-}
-
-function countWorkUnits(shiftCode: string) {
-  const value = normalizePlainShiftCode(shiftCode);
-
-  if (value === "V" || value === "ล") {
-    return 0;
-  }
-
-  if (value === "ว") {
-    return 1;
-  }
-
-  return splitShiftCode(stripInlineOt(shiftCode)).length;
 }
 
 function isNonOffNote(shiftCode: string) {
@@ -592,27 +579,6 @@ function formatCycleStatus(status: string) {
   return labels[status] ?? status;
 }
 
-function sortVisibleVersions<
-  T extends {
-    status: string;
-    createdAt: Date;
-  },
->(versions: T[]) {
-  return [...versions].sort((a, b) => {
-    const statusPriority =
-      versionStatusPriority(a.status) - versionStatusPriority(b.status);
-    if (statusPriority !== 0) {
-      return statusPriority;
-    }
-
-    return b.createdAt.getTime() - a.createdAt.getTime();
-  });
-}
-
-function versionStatusPriority(status: string) {
-  return status === "published" ? 0 : 1;
-}
-
 function normalizeYear(year: number) {
   return year > 2400 ? year - 543 : year;
 }
@@ -625,4 +591,10 @@ function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
   return startOfDay(nextDate);
+}
+
+function toDatabaseDate(date: Date) {
+  return new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { importStaffUsers } from "@/lib/import-users/import-staff-users";
 import {
   buildPersonnelImportPreview,
@@ -90,11 +90,11 @@ export async function confirmPersonnelImportAction(
     revalidatePath("/home/personnel-import");
 
     return {
-      ok: summary.failedCount === 0,
+      ok: summary.failedCount === 0 && summary.skippedCount === 0,
       message:
-        summary.failedCount === 0
+        summary.failedCount === 0 && summary.skippedCount === 0
           ? `นำเข้าข้อมูลบุคลากรสำเร็จ ${summary.successCount} รายการ`
-          : `นำเข้าได้ ${summary.successCount} รายการ และไม่สำเร็จ ${summary.failedCount} รายการ`,
+          : `นำเข้าได้ ${summary.successCount} รายการ ข้าม ${summary.skippedCount} รายการ และไม่สำเร็จ ${summary.failedCount} รายการ`,
       summary: { ...summary, totalRows: parsed.totalRows },
     };
   } catch (error) {

@@ -78,6 +78,7 @@ export async function signInAction(
     homeWardId: user.staff?.homeWardId ?? null,
     homeWardCode: user.staff?.homeWard.code ?? null,
     isHead: user.staff?.isHead ?? false,
+    sessionVersion: user.sessionVersion,
   };
 
   await setSessionCookie(sessionPayload);

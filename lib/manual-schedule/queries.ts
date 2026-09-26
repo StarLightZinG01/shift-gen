@@ -1,7 +1,12 @@
 import { formatMonthYear } from "@/lib/my-schedule/formatters";
-import { splitShiftCode } from "@/lib/manual-schedule/validation";
+import type { SessionPayload } from "@/lib/auth/session";
+import {
+  buildManualConstraintPolicy,
+  buildCoverageWarningsFromViolations,
+  validateManualScheduleConstraints,
+} from "@/lib/manual-schedule/constraint-validation";
+import { mergeStoredSpecialRuleSettings } from "@/lib/schedule-management/special-rules";
 import type {
-  CoverageWarning,
   ManualChangeHistoryRow,
   ManualScheduleData,
   ManualScheduleViolation,
@@ -14,12 +19,20 @@ import { prisma } from "@/lib/prisma";
 export async function getManualScheduleData({
   versionId,
   wardId,
+  session,
 }: {
   versionId?: string;
   wardId?: string;
+  session?: SessionPayload | null;
 } = {}): Promise<ManualScheduleData> {
+  const permittedWardId = await getPermittedWardId(session ?? null);
+  if (permittedWardId === undefined) {
+    return emptyData();
+  }
+
   const allWardVersions = await prisma.scheduleWardVersion.findMany({
     where: {
+      ...(permittedWardId ? { wardId: permittedWardId } : {}),
       status: {
         notIn: ["generating", "failed"],
       },
@@ -137,25 +150,33 @@ export async function getManualScheduleData({
     wards.map((ward) => ward.id),
   );
 
-  const scoreBatch = version.gaBatch ?? version.parentVersion?.gaBatch ?? null;
-  const violationGaRunId =
-    version.gaRunId ??
-    version.parentVersion?.gaRunId ??
-    findBatchRunIdForWard(scoreBatch?.runs ?? [], selectedWard.id);
-  const [assignments, manualChanges, staffOptions, violations] = await Promise.all([
+  const [assignments, manualChanges, staffOptions, preparation, requests, gaSettings] = await Promise.all([
     prisma.scheduleAssignment.findMany({
       where: {
         scheduleVersionId: version.id,
-        wardId: selectedWard.id,
       },
       include: {
-        staff: true,
+        staff: {
+          include: {
+            homeWard: { select: { id: true } },
+            wardPermissions: { select: { wardId: true } },
+            externalSelections: {
+              where: { cycleId: version.cycleId },
+              select: { wardId: true },
+            },
+          },
+        },
       },
       orderBy: [{ staff: { staffCode: "asc" } }, { workDate: "asc" }],
     }),
     prisma.scheduleManualChange.findMany({
       where: {
         scheduleVersionId: version.id,
+        OR: [
+          { oldWardId: selectedWard.id },
+          { newWardId: selectedWard.id },
+          { assignment: { wardId: selectedWard.id } },
+        ],
       },
       include: {
         changer: true,
@@ -170,14 +191,98 @@ export async function getManualScheduleData({
       },
       take: 20,
     }),
-    getEligibleStaffOptions(),
-    violationGaRunId
-      ? getGaViolations({
-          gaRunId: violationGaRunId,
+    getEligibleStaffOptions(selectedWard.id, version.cycleId),
+    prisma.wardCyclePreparation.findUnique({
+      where: {
+        cycleId_wardId: {
+          cycleId: version.cycleId,
           wardId: selectedWard.id,
-        })
-      : Promise.resolve([]),
+        },
+      },
+      select: {
+        staffingRequirements: {
+          select: {
+            shiftCode: true,
+            rnRequired: true,
+            pnNaRequired: true,
+            requiresIncharge: true,
+            holidayRnRequired: true,
+            holidayPnNaRequired: true,
+            holidayRequiresIncharge: true,
+          },
+        },
+        specialRuleSettings: {
+          select: {
+            ruleKey: true,
+            enabled: true,
+            parameters: true,
+          },
+        },
+      },
+    }),
+    prisma.availabilityRequest.findMany({
+      where: { cycleId: version.cycleId },
+      select: {
+        staffId: true,
+        requestDate: true,
+        requestType: true,
+        preferredShift: true,
+      },
+    }),
+    prisma.gaSetting.findFirst({
+      where: { isActive: true },
+      select: {
+        enableMorningEveningDouble: true,
+        enableNightEveningDouble: true,
+        maxConsecutiveWorkDays: true,
+        maxConsecutiveNights: true,
+        maxTraineePerShift: true,
+        maxShiftsPer7Days: true,
+        morningRegularRequired: true,
+      },
+    }),
   ]);
+  const violations = validateManualScheduleConstraints({
+    wardId: selectedWard.id,
+    wardLabel: `${selectedWard.code} - ${selectedWard.name}`,
+    year: normalizeYear(version.cycle.year),
+    month: version.cycle.month,
+    daysInMonth,
+    holidayDays,
+    assignments: assignments.map((assignment) => ({
+      staffId: assignment.staffId,
+      staffCode: assignment.staff.staffCode,
+      staffLabel: assignment.staff.fullName || assignment.staff.staffCode,
+      wardId: assignment.wardId,
+      day: assignment.workDate.getUTCDate(),
+      shiftCode: assignment.shiftCode,
+      otShifts: assignment.otShifts,
+      staffCategory: assignment.staff.staffCategory,
+      position: assignment.staff.position,
+      payPosition: assignment.staff.payPosition,
+      isHead: assignment.staff.isHead,
+      isTrainee: assignment.staff.isTrainee,
+      isNewNurse: assignment.staff.isNewNurse,
+      canBeInCharge: assignment.staff.canBeInCharge,
+      allowedWardIds: Array.from(new Set([
+        assignment.staff.homeWard.id,
+        ...assignment.staff.wardPermissions.map((permission) => permission.wardId),
+        ...assignment.staff.externalSelections.map((selection) => selection.wardId),
+      ])),
+    })),
+    requirements: preparation?.staffingRequirements ?? [],
+    specialRules: mergeStoredSpecialRuleSettings(
+      selectedWard.code,
+      preparation?.specialRuleSettings ?? [],
+    ),
+    requests: requests.map((request) => ({
+      staffId: request.staffId,
+      day: request.requestDate.getUTCDate(),
+      requestType: request.requestType,
+      preferredShift: request.preferredShift,
+    })),
+    policy: buildManualConstraintPolicy(gaSettings),
+  });
   const violationsByCell = groupViolationsByCell(violations);
 
   return {
@@ -190,17 +295,56 @@ export async function getManualScheduleData({
       latestManualChangesByWardId,
     ),
     staffOptions,
-    rows: buildRows(assignments, daysInMonth, violationsByCell),
+    rows: buildRows(
+      assignments.filter((assignment) => assignment.wardId === selectedWard.id),
+      daysInMonth,
+      violationsByCell,
+    ),
     daysInMonth,
     holidayDays,
     history: manualChanges.map(mapManualChange),
-    coverageWarnings: buildCoverageWarnings(assignments),
+    coverageWarnings: buildCoverageWarningsFromViolations(violations),
+    canPublish: version.status === "draft" && violations.length === 0,
     violations,
   };
 }
 
-async function getEligibleStaffOptions(): Promise<ManualScheduleStaffOption[]> {
+async function getPermittedWardId(session: SessionPayload | null) {
+  if (!session) {
+    return undefined;
+  }
+
+  if (session.roles.includes("admin")) {
+    return null;
+  }
+
+  if (!session.roles.includes("ward_head")) {
+    return undefined;
+  }
+
+  const staff = await prisma.staff.findUnique({
+    where: { userId: session.userId },
+    select: { homeWardId: true, isHead: true },
+  });
+
+  return staff?.isHead ? staff.homeWardId : undefined;
+}
+
+async function getEligibleStaffOptions(
+  wardId: string,
+  cycleId: string,
+): Promise<ManualScheduleStaffOption[]> {
   const staff = await prisma.staff.findMany({
+    where: {
+      OR: [
+        { homeWardId: wardId },
+        {
+          externalSelections: {
+            some: { wardId, cycleId },
+          },
+        },
+      ],
+    },
     include: {
       homeWard: true,
     },
@@ -218,13 +362,6 @@ async function getEligibleStaffOptions(): Promise<ManualScheduleStaffOption[]> {
     payPosition: member.payPosition ?? "",
     staffCategory: member.staffCategory,
   }));
-}
-
-function findBatchRunIdForWard(
-  runs: Array<GaScoreRunRecord & { id: string; inputSnapshot: unknown }>,
-  wardId: string,
-) {
-  return findBatchRunForWard(runs, wardId)?.id ?? null;
 }
 
 function findBatchRunForWard<T extends { inputSnapshot: unknown }>(
@@ -683,74 +820,11 @@ function extractInlineOtShifts(value: string) {
   return matches.join("/");
 }
 
-async function getGaViolations({
-  gaRunId,
-  wardId,
-}: {
-  gaRunId: string;
-  wardId: string;
-}): Promise<ManualScheduleViolation[]> {
-  const rows = await prisma.gaViolation.findMany({
-    where: {
-      gaRunId,
-      NOT: [
-        {
-          constraintCode: "double_shift",
-        },
-        {
-          severity: "info",
-        },
-      ],
-      OR: [
-        { wardId },
-        {
-          wardId: null,
-          staff: {
-            homeWardId: wardId,
-          },
-        },
-      ],
-    },
-    include: {
-      staff: {
-        select: {
-          staffCode: true,
-          fullName: true,
-        },
-      },
-      ward: {
-        select: {
-          code: true,
-          name: true,
-        },
-      },
-    },
-    orderBy: [
-      { severity: "asc" },
-      { violationDate: "asc" },
-      { constraintCode: "asc" },
-    ],
-  });
-
-  return rows.map((row) => ({
-    id: row.id,
-    day: row.violationDate?.getUTCDate() ?? null,
-    staffId: row.staffId,
-    staffLabel: row.staff?.fullName ?? null,
-    wardId: row.wardId,
-    wardLabel: row.ward ? `${row.ward.code} - ${row.ward.name}` : null,
-    constraintCode: row.constraintCode,
-    constraintLabel: formatConstraintLabel(row.constraintCode),
-    severity: row.severity,
-    message: row.message,
-  }));
-}
-
 function groupViolationsByCell(violations: ManualScheduleViolation[]) {
   const result = new Map<string, ManualScheduleViolation[]>();
 
   for (const violation of violations) {
-    if (!violation.staffId || !violation.day) {
+    if (violation.highlightCell === false || !violation.staffId || !violation.day) {
       continue;
     }
 
@@ -763,48 +837,6 @@ function groupViolationsByCell(violations: ManualScheduleViolation[]) {
 
 function cellViolationKey(staffId: string, day: number) {
   return `${staffId}:${day}`;
-}
-
-function formatConstraintLabel(code: string) {
-  const labels: Record<string, string> = {
-    coverage_under: "กำลังคนต่ำกว่าที่กำหนด",
-    coverage_over: "กำลังคนเกินที่กำหนด",
-    rn_coverage_under: "จำนวน RN ต่ำกว่าที่กำหนด",
-    pn_na_coverage_under: "จำนวน PN/NA ต่ำกว่าที่กำหนด",
-    incharge_missing: "ไม่มี Incharge ประจำกะ",
-    custom_special_rule: "ผิดกฎเฉพาะของวอร์ด",
-    incharge_min_per_shift: "ทุกกะต้องมี RN.Incharge",
-    icu_new_not_together: "RN ICU/RNSuC และ RN new ไม่ขึ้นเวรด้วยกัน",
-    sunday_morning_rn_exact: "วันอาทิตย์เวรเช้า ต้องมี RN ตามจำนวนที่กำหนด",
-    morning_rn_by_day: "RN เวรเช้า แยกจำนวนตามวันราชการและวันหยุด",
-    weekday_morning_pn_exact: "วันราชการเวรเช้าต้องมี PN ตามจำนวนที่กำหนด",
-    pn_na_equal_per_shift: "แต่ละเวรต้องมี PN และ NA คู่กันในจำนวนเท่ากัน",
-    one_shift_per_day: "บุคลากรมีเวรซ้ำในวันเดียว",
-    requested_off_assignment: "จัดเวรไม่ตรงตามคำขอ",
-    unavailable_assignment: "จัดเวรในวันที่เข้าเวรไม่ได้",
-    weekly_max_shifts: "เวรเกิน 10 เวรใน 7 วัน",
-    max_consecutive_work_days: "ทำงานติดกันเกินกำหนด",
-    consecutive_night: "เวรดึกติดต่อกันเกิน 2 เวร",
-    consecutive_work_days: "ทำงานติดกันเกินกำหนด",
-    rest_period: "พักหลังเวรไม่พอ",
-    short_rest_warning: "พักระหว่างเวรน้อยกว่าเกณฑ์",
-    insufficient_rest: "พักระหว่างเวรน้อยกว่าเกณฑ์",
-    continuous_24h_warning: "เสี่ยงทำงานต่อเนื่อง 24 ชั่วโมง",
-    work_24h: "ทำงานต่อเนื่อง 24 ชั่วโมง",
-    trainee_per_shift: "พยาบาลใหม่เกินต่อกะ",
-    forbidden_sequence: "ลำดับเวรต้องห้าม",
-    evening_to_night: "บ่ายต่อดึก",
-    invalid_ward_assignment: "จัดคนผิดวอร์ดที่ขึ้นได้",
-    head_invalid_assignment: "หัวหน้าวอร์ดถูกจัดกะที่ไม่อนุญาต",
-    head_emergency_warning: "ใช้หัวหน้าช่วยเวรโดยไม่จำเป็น",
-    head_emergency_assignment: "ใช้หัวหน้าช่วยเวรฉุกเฉิน",
-    morning_regular_required: "เวรเช้าไม่มีเวรปกติ",
-    ot_shift_must_be_assigned: "OT ไม่ตรงกับเวรที่จัด",
-    no_duplicate_regular_ot: "เวรปกติและ OT ซ้ำกัน",
-    validation_error: "ข้อผิดพลาดจากการตรวจผล GA",
-  };
-
-  return labels[code] ?? code;
 }
 
 function compareManualScheduleRows(a: ManualScheduleRow, b: ManualScheduleRow) {
@@ -832,36 +864,6 @@ function getManualPositionOrder(row: Pick<ManualScheduleRow, "payPosition" | "st
   };
 
   return positions[position] ?? positions[row.staffCategory] ?? 6;
-}
-
-function buildCoverageWarnings(
-  assignments: Array<{
-    workDate: Date;
-    shiftCode: string;
-  }>,
-): CoverageWarning[] {
-  const countByDayShift = new Map<string, number>();
-
-  for (const assignment of assignments) {
-    const day = assignment.workDate.getDate();
-    for (const shiftCode of splitShiftCode(assignment.shiftCode)) {
-      if (shiftCode === "ช" || shiftCode === "บ" || shiftCode === "ด") {
-        const key = `${day}:${shiftCode}`;
-        countByDayShift.set(key, (countByDayShift.get(key) ?? 0) + 1);
-      }
-    }
-  }
-
-  return Array.from(countByDayShift.entries())
-    .filter(([, count]) => count === 0)
-    .map(([key]) => {
-      const [day, shiftCode] = key.split(":");
-      return {
-        day: Number(day),
-        shiftCode,
-        message: `วันที่ ${day} เวร ${shiftCode} ยังไม่มีกำลังคน`,
-      };
-    });
 }
 
 function mapManualChange(change: {

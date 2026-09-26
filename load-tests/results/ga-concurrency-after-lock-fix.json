@@ -1,0 +1,450 @@
+{
+  "startedAt": "2026-09-25T08:50:32.119Z",
+  "target": {
+    "baseUrl": "http://localhost:3100",
+    "database": "shift_gen_loadtest_20260925",
+    "cycleId": "9b3bdc0a-a5d4-40fe-8a09-764960c0af37",
+    "wardId": "1cfb482a-847f-4698-8619-2dbbbf0a03a9"
+  },
+  "actionId": "405ef811102646f0da3a45d29e2c5c11c56fbf8fb7",
+  "concurrency": 15,
+  "rounds": [
+    {
+      "round": 1,
+      "elapsedMs": 1782,
+      "passed": true,
+      "created": {
+        "batches": 1,
+        "runs": 1,
+        "scheduleVersions": 1,
+        "wardVersions": 1
+      },
+      "responseSummary": {
+        "success": 1,
+        "rejected": 14,
+        "invalid": 0,
+        "httpStatuses": {
+          "200": 15
+        },
+        "resultMessages": {
+          "แบ่ง 1 วอร์ดเป็น 1 กลุ่ม และสร้างงาน GA แล้ว": 1,
+          "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว": 14
+        }
+      },
+      "responses": [
+        {
+          "requestNo": 1,
+          "elapsedMs": 585,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 2,
+          "elapsedMs": 573,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 3,
+          "elapsedMs": 637,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 4,
+          "elapsedMs": 573,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 5,
+          "elapsedMs": 637,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 6,
+          "elapsedMs": 570,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 7,
+          "elapsedMs": 572,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 8,
+          "elapsedMs": 572,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 9,
+          "elapsedMs": 571,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 10,
+          "elapsedMs": 572,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 11,
+          "elapsedMs": 1769,
+          "httpStatus": 200,
+          "resultStatus": "success",
+          "message": "แบ่ง 1 วอร์ดเป็น 1 กลุ่ม และสร้างงาน GA แล้ว",
+          "bodySample": "2:\"$Sreact.fragment\"\n3:I[39756,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"default\"]\n4:I[37457,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"default\"]\n5:I[3484,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"Toaster\"]\n8:I[97367,[\"/_next/static/chunks/2zwscmdy06y7i.js\","
+        },
+        {
+          "requestNo": 12,
+          "elapsedMs": 572,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 13,
+          "elapsedMs": 571,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 14,
+          "elapsedMs": 570,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 15,
+          "elapsedMs": 570,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "elapsedMs": 1435,
+      "passed": true,
+      "created": {
+        "batches": 1,
+        "runs": 1,
+        "scheduleVersions": 1,
+        "wardVersions": 1
+      },
+      "responseSummary": {
+        "success": 1,
+        "rejected": 14,
+        "invalid": 0,
+        "httpStatuses": {
+          "200": 15
+        },
+        "resultMessages": {
+          "แบ่ง 1 วอร์ดเป็น 1 กลุ่ม และสร้างงาน GA แล้ว": 1,
+          "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว": 14
+        }
+      },
+      "responses": [
+        {
+          "requestNo": 1,
+          "elapsedMs": 316,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 2,
+          "elapsedMs": 1435,
+          "httpStatus": 200,
+          "resultStatus": "success",
+          "message": "แบ่ง 1 วอร์ดเป็น 1 กลุ่ม และสร้างงาน GA แล้ว",
+          "bodySample": "2:\"$Sreact.fragment\"\n3:I[39756,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"default\"]\n4:I[37457,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"default\"]\n5:I[3484,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"Toaster\"]\n8:I[97367,[\"/_next/static/chunks/2zwscmdy06y7i.js\","
+        },
+        {
+          "requestNo": 3,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 4,
+          "elapsedMs": 316,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 5,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 6,
+          "elapsedMs": 316,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 7,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 8,
+          "elapsedMs": 316,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 9,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 10,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 11,
+          "elapsedMs": 316,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 12,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 13,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 14,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 15,
+          "elapsedMs": 315,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "elapsedMs": 1502,
+      "passed": true,
+      "created": {
+        "batches": 1,
+        "runs": 1,
+        "scheduleVersions": 1,
+        "wardVersions": 1
+      },
+      "responseSummary": {
+        "success": 1,
+        "rejected": 14,
+        "invalid": 0,
+        "httpStatuses": {
+          "200": 15
+        },
+        "resultMessages": {
+          "แบ่ง 1 วอร์ดเป็น 1 กลุ่ม และสร้างงาน GA แล้ว": 1,
+          "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว": 14
+        }
+      },
+      "responses": [
+        {
+          "requestNo": 1,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 2,
+          "elapsedMs": 308,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 3,
+          "elapsedMs": 308,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 4,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 5,
+          "elapsedMs": 1502,
+          "httpStatus": 200,
+          "resultStatus": "success",
+          "message": "แบ่ง 1 วอร์ดเป็น 1 กลุ่ม และสร้างงาน GA แล้ว",
+          "bodySample": "2:\"$Sreact.fragment\"\n3:I[39756,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"default\"]\n4:I[37457,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"default\"]\n5:I[3484,[\"/_next/static/chunks/2zwscmdy06y7i.js\",\"/_next/static/chunks/14mrh2-p_w84d.js\",\"/_next/static/chunks/1rtgekvfn4-1p.js\"],\"Toaster\"]\n8:I[97367,[\"/_next/static/chunks/2zwscmdy06y7i.js\","
+        },
+        {
+          "requestNo": 6,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 7,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 8,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 9,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 10,
+          "elapsedMs": 308,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 11,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 12,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 13,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 14,
+          "elapsedMs": 307,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        },
+        {
+          "requestNo": 15,
+          "elapsedMs": 306,
+          "httpStatus": 200,
+          "resultStatus": "error",
+          "message": "รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว",
+          "bodySample": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false,\"b\":\"TVmB1TmP9Rti8nbShkrjV\"}\n1:{\"status\":\"error\",\"message\":\"รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว\"}\n"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-09-25T08:50:37.303Z",
+  "passed": true
+}

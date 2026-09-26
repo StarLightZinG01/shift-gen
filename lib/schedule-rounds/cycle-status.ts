@@ -5,6 +5,10 @@ type CycleStatusDates = {
   dataLockDate: Date | null;
 };
 
+type RequestWindowDates = CycleStatusDates & {
+  requestCloseDate: Date | null;
+};
+
 export function resolveScheduledCycleStatus(
   cycle: CycleStatusDates,
   now = new Date(),
@@ -27,6 +31,32 @@ export function resolveCycleStatus(
   }
 
   return resolveScheduledCycleStatus(cycle, now);
+}
+
+export function isCycleDataLocked(
+  cycle: CycleStatusDates & { status?: string },
+  now = new Date(),
+) {
+  if (cycle.status === "generating" || cycle.status === "published") {
+    return true;
+  }
+
+  return resolveScheduledCycleStatus(cycle, now) === "locked";
+}
+
+export function isRequestWindowOpen(
+  cycle: RequestWindowDates & { status?: string },
+  now = new Date(),
+) {
+  if (isCycleDataLocked(cycle, now)) {
+    return false;
+  }
+
+  const today = bangkokDateKey(now);
+  const openDate = utcDateKey(cycle.requestOpenDate);
+  const closeDate = utcDateKey(cycle.requestCloseDate);
+
+  return Boolean(openDate && closeDate && today >= openDate && today <= closeDate);
 }
 
 function utcDateKey(date: Date | null) {

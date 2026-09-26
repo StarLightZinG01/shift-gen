@@ -14,6 +14,7 @@ export type SessionPayload = {
   homeWardId: string | null;
   homeWardCode: string | null;
   isHead: boolean;
+  sessionVersion: number;
 };
 
 type JwtSessionPayload = SessionPayload & {
@@ -44,6 +45,7 @@ export async function verifySessionToken(token: string) {
     homeWardId: nullableString(payload.homeWardId),
     homeWardCode: nullableString(payload.homeWardCode),
     isHead: payload.isHead === true,
+    sessionVersion: requireNumber(payload.sessionVersion, "sessionVersion"),
     exp: typeof payload.exp === "number" ? payload.exp : undefined,
     iat: typeof payload.iat === "number" ? payload.iat : undefined,
   } satisfies JwtSessionPayload;
@@ -74,21 +76,6 @@ export async function clearSessionCookie() {
   });
 }
 
-export async function getCurrentSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-  if (!token) {
-    return null;
-  }
-
-  try {
-    return await verifySessionToken(token);
-  } catch {
-    return null;
-  }
-}
-
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
 
@@ -109,4 +96,12 @@ function requireString(value: unknown, fieldName: string) {
 
 function nullableString(value: unknown) {
   return typeof value === "string" ? value : null;
+}
+
+function requireNumber(value: unknown, fieldName: string) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`Invalid session token: missing ${fieldName}.`);
+  }
+
+  return value;
 }

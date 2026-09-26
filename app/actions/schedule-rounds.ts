@@ -4,8 +4,14 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { prisma } from "@/lib/prisma";
+import {
+  isSameScheduleRoundPeriod,
+  parseBangkokDateTimeInput,
+  parseDateInput,
+  validateScheduleRoundDateOrder,
+} from "@/lib/schedule-rounds/round-dates";
 
 export type CreateScheduleRoundResult =
   | {
@@ -46,7 +52,7 @@ const createScheduleRoundSchema = z
     const requestOpenDate = parseDateInput(data.requestOpenDate);
     const requestCloseDate = parseDateInput(data.requestCloseDate);
     const dataLockDate = parseDateInput(data.dataLockDate);
-    const autoGenerateAt = parseDateTimeInput(data.autoGenerateAt);
+    const autoGenerateAt = parseBangkokDateTimeInput(data.autoGenerateAt);
 
     if (!requestOpenDate) {
       context.addIssue({
@@ -84,27 +90,18 @@ const createScheduleRoundSchema = z
       return;
     }
 
-    if (requestOpenDate > requestCloseDate) {
+    const orderIssue = validateScheduleRoundDateOrder({
+      requestOpenDate,
+      requestCloseDate,
+      dataLockDate,
+      dataLockDateInput: data.dataLockDate,
+      autoGenerateAt,
+    });
+    if (orderIssue) {
       context.addIssue({
         code: "custom",
-        message: "วันที่เปิดรับคำขอต้องไม่เกินวันที่ปิดรับคำขอ",
-        path: ["requestOpenDate"],
-      });
-    }
-
-    if (requestCloseDate > dataLockDate) {
-      context.addIssue({
-        code: "custom",
-        message: "วันที่ปิดรับคำขอต้องไม่เกินวันที่ล็อกข้อมูล",
-        path: ["requestCloseDate"],
-      });
-    }
-
-    if (dataLockDate > autoGenerateAt) {
-      context.addIssue({
-        code: "custom",
-        message: "วันที่ล็อกข้อมูลต้องไม่เกินวันที่เริ่มจัดตารางด้วย GA",
-        path: ["dataLockDate"],
+        message: orderIssue.message,
+        path: [orderIssue.path],
       });
     }
   });
@@ -292,7 +289,7 @@ export async function createScheduleRoundAction(
   const requestOpenDate = parseDateInput(data.requestOpenDate);
   const requestCloseDate = parseDateInput(data.requestCloseDate);
   const dataLockDate = parseDateInput(data.dataLockDate);
-  const autoGenerateAt = parseDateTimeInput(data.autoGenerateAt);
+  const autoGenerateAt = parseBangkokDateTimeInput(data.autoGenerateAt);
 
   if (!requestOpenDate || !requestCloseDate || !dataLockDate || !autoGenerateAt) {
     return {
@@ -395,7 +392,7 @@ export async function updateScheduleRoundAction(
   const requestOpenDate = parseDateInput(data.requestOpenDate);
   const requestCloseDate = parseDateInput(data.requestCloseDate);
   const dataLockDate = parseDateInput(data.dataLockDate);
-  const autoGenerateAt = parseDateTimeInput(data.autoGenerateAt);
+  const autoGenerateAt = parseBangkokDateTimeInput(data.autoGenerateAt);
 
   if (!requestOpenDate || !requestCloseDate || !dataLockDate || !autoGenerateAt) {
     return {
@@ -405,9 +402,23 @@ export async function updateScheduleRoundAction(
   }
 
   try {
-    const holidayDates = parseHolidayDates(data.holidayDates, data.year, data.month);
-
     await prisma.$transaction(async (tx) => {
+      const existingCycle = await tx.scheduleCycle.findUnique({
+        where: { id: data.cycleId },
+        select: { year: true, month: true },
+      });
+      if (!existingCycle) {
+        throw new Error("ไม่พบรอบจัดตารางนี้");
+      }
+      if (!isSameScheduleRoundPeriod(existingCycle, data)) {
+        throw new Error("ไม่สามารถเปลี่ยนเดือนหรือปีของรอบที่สร้างแล้ว");
+      }
+      const holidayDates = parseHolidayDates(
+        data.holidayDates,
+        existingCycle.year,
+        existingCycle.month,
+      );
+
       const duplicateCycle = await tx.scheduleCycle.findFirst({
         where: {
           year: data.year,
@@ -495,24 +506,6 @@ export async function deleteScheduleRoundAction(
         error instanceof Error ? error.message : "ไม่สามารถลบรอบจัดตารางได้",
     };
   }
-}
-
-function parseDateInput(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function parseDateTimeInput(value: string) {
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];

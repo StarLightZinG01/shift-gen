@@ -20,6 +20,7 @@ type ReadinessInput = {
   specialRuleSettings?: SpecialRuleSetting[];
   cycle?: CycleContext;
   ward?: WardContext | null;
+  externalWarnings?: string[];
 };
 
 const SPECIAL_RULE_PARAMETER_CHECKS: Partial<
@@ -66,6 +67,7 @@ export function buildReadinessChecks({
   specialRuleSettings = [],
   cycle,
   ward,
+  externalWarnings = [],
 }: ReadinessInput): ReadinessCheck[] {
   const requirements = getRequirements(staffingRequirements);
   const completeRequirements =
@@ -102,6 +104,11 @@ export function buildReadinessChecks({
     : true;
 
   const checks: ReadinessCheck[] = [
+    ...externalWarnings.map((message, index) => ({
+      id: `external-warning-${index}`,
+      status: "warning" as const,
+      message,
+    })),
     {
       id: "round-context",
       status: hasRoundContext ? "passed" : "warning",

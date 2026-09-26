@@ -56,10 +56,12 @@ export type ImportStaffUsersSummary = {
   totalRows: number;
   successCount: number;
   failedCount: number;
+  skippedCount: number;
   createdUsers: number;
   updatedUsers: number;
   createdStaff: number;
   updatedStaff: number;
   createdWards: number;
   errors: ImportRowIssue[];
+  skipped: ImportRowIssue[];
 };

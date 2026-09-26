@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { prisma } from "@/lib/prisma";
+import { isRequestWindowOpen } from "@/lib/schedule-rounds/cycle-status";
 
 const preferredShiftCodes = ["ช", "บ", "ด", "ช/บ", "ด/บ"] as const;
 
@@ -93,6 +94,10 @@ export async function saveLeaveRequestsAction(
 
       if (!cycle) {
         throw new Error("ไม่พบรอบจัดตารางที่ต้องการส่งคำขอ");
+      }
+
+      if (!isRequestWindowOpen(cycle)) {
+        throw new Error("ขณะนี้อยู่นอกช่วงเปิดรับคำขอ หรือรอบจัดตารางถูกล็อกแล้ว");
       }
 
       if (!staff) {

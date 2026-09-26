@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { syncStaffUserRole } from "@/lib/auth/staff-role-sync";
 
 import type { ShiftStaffingRequirement } from "./types";
 import type { SpecialRuleSetting } from "./special-rules";
@@ -228,11 +229,17 @@ async function updateHomeStaff(
     throw new Error("ไม่พบรหัสอ้างอิงบุคลากรเดิม");
   }
 
-  await tx.staff.updateMany({
-    where: {
-      id: row.staffId,
-      homeWardId: wardId,
-    },
+  const staff = await tx.staff.findFirst({
+    where: { id: row.staffId, homeWardId: wardId },
+    select: { id: true, userId: true, fullName: true, isHead: true },
+  });
+
+  if (!staff) {
+    throw new Error("ไม่พบบุคลากรเดิมในวอร์ดนี้");
+  }
+
+  await tx.staff.update({
+    where: { id: staff.id },
     data: {
       staffCode: row.code,
       fullName: row.fullName,
@@ -246,6 +253,26 @@ async function updateHomeStaff(
       canBeInCharge: row.canBeInCharge,
     },
   });
+
+  if (staff.userId) {
+    const rolesChanged = await syncStaffUserRole(
+      tx,
+      staff.userId,
+      row.isHead,
+    );
+    const identityChanged =
+      staff.fullName !== row.fullName ||
+      staff.isHead !== row.isHead ||
+      rolesChanged;
+
+    await tx.user.update({
+      where: { id: staff.userId },
+      data: {
+        displayName: row.fullName,
+        ...(identityChanged ? { sessionVersion: { increment: 1 } } : {}),
+      },
+    });
+  }
 
   return row.staffId;
 }
@@ -262,6 +289,9 @@ async function createHomeStaff(
     select: {
       id: true,
       homeWardId: true,
+      userId: true,
+      fullName: true,
+      isHead: true,
     },
   });
 
@@ -289,6 +319,26 @@ async function createHomeStaff(
         canBeInCharge: row.canBeInCharge,
       },
     });
+
+    if (existingStaff.userId) {
+      const rolesChanged = await syncStaffUserRole(
+        tx,
+        existingStaff.userId,
+        row.isHead,
+      );
+      const identityChanged =
+        existingStaff.fullName !== row.fullName ||
+        existingStaff.isHead !== row.isHead ||
+        rolesChanged;
+
+      await tx.user.update({
+        where: { id: existingStaff.userId },
+        data: {
+          displayName: row.fullName,
+          ...(identityChanged ? { sessionVersion: { increment: 1 } } : {}),
+        },
+      });
+    }
 
     return existingStaff.id;
   }

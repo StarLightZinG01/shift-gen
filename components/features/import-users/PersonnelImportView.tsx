@@ -346,7 +346,7 @@ function IssueSection({ title, items, tone }: { title: string; items: PersonnelI
 }
 
 function ImportSummary({ summary }: { summary: ImportStaffUsersSummary }) {
-  const hasFailures = summary.failedCount > 0;
+  const hasFailures = summary.failedCount > 0 || summary.skippedCount > 0;
 
   return (
     <section
@@ -367,13 +367,18 @@ function ImportSummary({ summary }: { summary: ImportStaffUsersSummary }) {
             ผลการนำเข้า
           </h2>
           <p className={`mt-1 text-sm ${hasFailures ? "text-amber-800" : "text-emerald-800"}`}>
-            สำเร็จ {summary.successCount} รายการ · สร้างใหม่ {summary.createdStaff} รายการ · อัปเดต {summary.updatedStaff} รายการ · สร้างหน่วยงาน {summary.createdWards} รายการ
+            สำเร็จ {summary.successCount} รายการ · ข้าม {summary.skippedCount} รายการ · สร้างใหม่ {summary.createdStaff} รายการ · อัปเดต {summary.updatedStaff} รายการ · สร้างหน่วยงาน {summary.createdWards} รายการ
           </p>
           {hasFailures ? (
             <div className="mt-3 space-y-1 text-sm text-amber-900">
               {summary.errors.slice(0, 10).map((error, index) => (
                 <p key={`${error.rowNumber}-${index}`}>
                   แถว {error.rowNumber}: {error.message}
+                </p>
+              ))}
+              {summary.skipped.slice(0, 10).map((item, index) => (
+                <p key={`skipped-${item.rowNumber}-${index}`}>
+                  แถว {item.rowNumber}: {item.message}
                 </p>
               ))}
             </div>

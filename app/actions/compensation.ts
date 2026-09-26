@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { recalculateAndSaveCompensation } from "@/lib/compensation/save";
 
 export type RecalculateCompensationState = {

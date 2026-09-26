@@ -22,6 +22,7 @@ model User {
   displayName  String   @map("display_name")
   employeeCode String?  @unique @map("employee_code")
   status       String   @default("active")
+  sessionVersion Int    @default(0) @map("session_version")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

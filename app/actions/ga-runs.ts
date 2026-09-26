@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@/app/generated/prisma/client";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { buildGaInput } from "@/lib/ga-input/build-ga-input";
 import { activeGaRunStatuses } from "@/lib/ga-runs/queries";
+import { getRetryWardIds } from "@/lib/ga-runs/retry-targets";
 import { buildGaRunReadiness } from "@/lib/ga-runs/validation";
 import {
   buildGaWardGroups,
@@ -66,6 +67,9 @@ const startGaRunSchema = z.union([
 ]);
 const cancelGaRunSchema = z.string().uuid("ไม่พบรอบจัดตารางที่ถูกต้อง");
 const retryGaRunSchema = z.string().uuid("ไม่พบงาน GA ที่ถูกต้อง");
+type GaRunTransactionClient = Parameters<
+  Parameters<typeof prisma.$transaction>[0]
+>[0];
 
 export async function startGaRunAction(
   input:
@@ -180,6 +184,18 @@ export async function startGaRunAction(
     }
 
     const created = await prisma.$transaction(async (tx) => {
+      await lockScheduleCycle(tx, cycle.id);
+      const activeRunInsideTransaction = await tx.gaRun.findFirst({
+        where: {
+          cycleId: cycle.id,
+          status: { in: activeGaRunStatuses },
+        },
+        select: { id: true },
+      });
+      if (activeRunInsideTransaction) {
+        throw new Error("รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว");
+      }
+
       const latestVersion = await tx.scheduleVersion.aggregate({
         where: { cycleId: cycle.id },
         _max: { versionNo: true },
@@ -354,6 +370,7 @@ export async function cancelActiveGaRunAction(
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      await lockScheduleCycle(tx, parsedCycleId.data);
       const activeRuns = await tx.gaRun.findMany({
         where: {
           cycleId: parsedCycleId.data,
@@ -374,6 +391,7 @@ export async function cancelActiveGaRunAction(
         };
       }
 
+      const cancelledRuns: typeof activeRuns = [];
       for (const run of activeRuns) {
         const settings =
           run.settingsSnapshot &&
@@ -382,9 +400,10 @@ export async function cancelActiveGaRunAction(
             ? { ...run.settingsSnapshot }
             : {};
 
-        await tx.gaRun.update({
+        const updated = await tx.gaRun.updateMany({
           where: {
             id: run.id,
+            status: { in: activeGaRunStatuses },
           },
           data: {
             status: "failed",
@@ -399,41 +418,32 @@ export async function cancelActiveGaRunAction(
             } as Prisma.InputJsonValue,
           },
         });
+        if (updated.count === 1) {
+          cancelledRuns.push(run);
+        }
       }
 
       const batchIds = Array.from(
-        new Set(activeRuns.map((run) => run.batchId).filter((id): id is string => Boolean(id))),
+        new Set(cancelledRuns.map((run) => run.batchId).filter((id): id is string => Boolean(id))),
       );
-      if (batchIds.length > 0) {
-        await tx.gaRunBatch.updateMany({
-          where: { id: { in: batchIds } },
-          data: {
-            status: "failed",
-            failedGroupCount: activeRuns.length,
-            finishedAt: new Date(),
-          },
-        });
-        await tx.scheduleVersion.updateMany({
-          where: {
-            gaBatch: { id: { in: batchIds } },
-          },
-          data: { status: "failed" },
-        });
-        await tx.scheduleWardVersion.updateMany({
-          where: {
-            scheduleVersion: {
-              gaBatch: { id: { in: batchIds } },
-            },
-          },
-          data: { status: "failed" },
-        });
+      for (const batchId of batchIds) {
+        await refreshBatchAfterCancellation(tx, batchId);
       }
 
-      const cycle = await tx.scheduleCycle.findUnique({
-        where: { id: parsedCycleId.data },
-        select: { requestOpenDate: true, dataLockDate: true },
+      const remainingActiveRuns = await tx.gaRun.count({
+        where: {
+          cycleId: parsedCycleId.data,
+          status: { in: activeGaRunStatuses },
+        },
       });
-      if (cycle) {
+      if (remainingActiveRuns === 0 && cancelledRuns.length > 0) {
+        const cycle = await tx.scheduleCycle.findUnique({
+          where: { id: parsedCycleId.data },
+          select: { requestOpenDate: true, dataLockDate: true },
+        });
+        if (!cycle) {
+          throw new Error("ไม่พบรอบจัดตารางนี้");
+        }
         await tx.scheduleCycle.updateMany({
           where: {
             id: parsedCycleId.data,
@@ -446,7 +456,7 @@ export async function cancelActiveGaRunAction(
       }
 
       return {
-        cancelledCount: activeRuns.length,
+        cancelledCount: cancelledRuns.length,
       };
     });
 
@@ -498,11 +508,16 @@ export async function retryFailedGaGroupAction(gaRunId: string) {
           cycleId: true,
           batchId: true,
           status: true,
+          inputSnapshot: true,
           settingsSnapshot: true,
         },
       });
       if (!run?.batchId || run.status !== "failed") {
         throw new Error("งานนี้ไม่ใช่กลุ่มที่ล้มเหลวและพร้อมรันซ้ำ");
+      }
+      const retryWardIds = getRetryWardIds(run.inputSnapshot);
+      if (retryWardIds.length === 0) {
+        throw new Error("ไม่พบวอร์ดของกลุ่ม GA นี้ในข้อมูลที่ส่งให้ GA");
       }
 
       const settings =
@@ -548,7 +563,11 @@ export async function retryFailedGaGroupAction(gaRunId: string) {
         data: { status: "generating" },
       });
       await tx.scheduleWardVersion.updateMany({
-        where: { scheduleVersionId: batch.scheduleVersionId, status: "failed" },
+        where: {
+          scheduleVersionId: batch.scheduleVersionId,
+          wardId: { in: retryWardIds },
+          status: "failed",
+        },
         data: { status: "generating" },
       });
       await tx.scheduleCycle.update({
@@ -579,6 +598,90 @@ function normalizeTargetWardIds(value: string[] | null | undefined) {
   }
 
   return wardIds;
+}
+
+async function lockScheduleCycle(
+  tx: GaRunTransactionClient,
+  cycleId: string,
+) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM schedule_cycles
+    WHERE id = ${cycleId}::uuid
+  `;
+  if (rows.length === 0) {
+    throw new Error("ไม่พบรอบจัดตารางนี้");
+  }
+  const lockRows = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+    SELECT pg_try_advisory_xact_lock(hashtextextended(${cycleId}, 0)) AS acquired
+  `;
+  if (!lockRows[0]?.acquired) {
+    throw new Error("รอบนี้มีงาน GA ที่รอรันหรือกำลังรันอยู่แล้ว");
+  }
+}
+
+async function lockGaBatch(
+  tx: GaRunTransactionClient,
+  batchId: string,
+) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM ga_run_batches
+    WHERE id = ${batchId}::uuid
+    FOR UPDATE
+  `;
+  if (rows.length === 0) {
+    throw new Error("ไม่พบชุดงาน GA");
+  }
+}
+
+async function refreshBatchAfterCancellation(
+  tx: GaRunTransactionClient,
+  batchId: string,
+) {
+  await lockGaBatch(tx, batchId);
+  const batch = await tx.gaRunBatch.findUnique({
+    where: { id: batchId },
+    select: { scheduleVersionId: true },
+  });
+  if (!batch) {
+    throw new Error("ไม่พบชุดงาน GA");
+  }
+
+  const runs = await tx.gaRun.findMany({
+    where: { batchId },
+    select: { status: true },
+  });
+  const completed = runs.filter((run) => run.status === "completed").length;
+  const failed = runs.filter((run) => run.status === "failed").length;
+  const active = runs.filter((run) => activeGaRunStatuses.includes(run.status)).length;
+  const batchStatus = active > 0 ? "running" : failed > 0 ? "failed" : "completed";
+
+  await tx.gaRunBatch.update({
+    where: { id: batchId },
+    data: {
+      status: batchStatus,
+      completedGroupCount: completed,
+      failedGroupCount: failed,
+      hardScore: null,
+      softScore: null,
+      objective: null,
+      fitness: null,
+      finishedAt: active > 0 ? null : new Date(),
+    },
+  });
+
+  if (active === 0) {
+    const versionStatus = failed > 0 ? "failed" : "draft";
+    await tx.scheduleVersion.update({
+      where: { id: batch.scheduleVersionId },
+      data: { status: versionStatus },
+    });
+    await tx.scheduleWardVersion.updateMany({
+      where: { scheduleVersionId: batch.scheduleVersionId },
+      data: { status: versionStatus },
+    });
+  }
 }
 
 function buildSettingsSnapshot(

@@ -355,7 +355,11 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
       setIsSaveDialogOpen(false);
       setHasUnsavedChanges(false);
       setPendingReasons({});
-      toast.success(result.message);
+      if (result.publishBlocked) {
+        toast.warning(result.message);
+      } else {
+        toast.success(result.message);
+      }
       navigateWith({
         manualVersionId: result.versionId ?? data.version!.id,
         manualWardId: data.selectedWardId,
@@ -851,7 +855,7 @@ export function ManualSchedulePanel({ data }: ManualSchedulePanelProps) {
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {data.coverageWarnings.map((warning) => (
               <div
-                key={`${warning.day}-${warning.shiftCode}`}
+                key={warning.id}
                 className="rounded-lg bg-white px-3 py-2 text-sm text-amber-900"
               >
                 {warning.message}

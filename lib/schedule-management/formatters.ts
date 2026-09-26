@@ -66,7 +66,7 @@ export function formatDateTime(date: Date | null) {
     return "ยังไม่ได้กำหนดวันเริ่มจัดตาราง";
   }
 
-  return `${formatThaiDay(date)} เวลา ${formatThaiTime(date)} น.`;
+  return `${formatBangkokDay(date)} เวลา ${formatThaiTime(date)} น.`;
 }
 
 function formatThaiDay(date: Date) {
@@ -78,7 +78,15 @@ function formatThaiTime(date: Date) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Bangkok",
   }).format(date);
+}
+
+function formatBangkokDay(date: Date) {
+  return `วันที่ ${new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    timeZone: "Asia/Bangkok",
+  }).format(date)}`;
 }
 
 export function formatCycleStatus(status: string) {

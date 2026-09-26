@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AccountSettingsView } from "@/components/features/account-settings/AccountSettingsView";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 import { prisma } from "@/lib/prisma";
 
 export default async function AccountSettingsPage() {

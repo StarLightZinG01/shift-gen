@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
+import { prisma } from "@/lib/prisma";
 import { saveScheduleManagementData } from "@/lib/schedule-management/save";
+import { isCycleDataLocked } from "@/lib/schedule-rounds/cycle-status";
 import {
   SPECIAL_RULE_DEFINITIONS,
   type SpecialRuleSetting,
@@ -68,9 +70,30 @@ export async function saveScheduleManagementAction(
     }
 
     const isAdmin = session.roles.includes("admin");
+    const isWardHead = session.roles.includes("ward_head");
 
-    if (!isAdmin && session.homeWardId !== parsed.data.wardId) {
+    if (
+      !isAdmin &&
+      (!isWardHead || session.homeWardId !== parsed.data.wardId)
+    ) {
       throw new Error("บัญชีนี้ไม่มีสิทธิ์บันทึกข้อมูลของวอร์ดนี้");
+    }
+
+    const cycle = await prisma.scheduleCycle.findUnique({
+      where: { id: parsed.data.cycleId },
+      select: {
+        status: true,
+        requestOpenDate: true,
+        dataLockDate: true,
+      },
+    });
+
+    if (!cycle) {
+      throw new Error("ไม่พบรอบจัดตารางที่ต้องการบันทึก");
+    }
+
+    if (isCycleDataLocked(cycle)) {
+      throw new Error("รอบจัดตารางนี้ล็อกข้อมูลแล้ว ไม่สามารถแก้ไขได้");
     }
 
     await saveScheduleManagementData({

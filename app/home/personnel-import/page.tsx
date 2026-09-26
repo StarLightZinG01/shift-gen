@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { PersonnelImportView } from "@/components/features/import-users/PersonnelImportView";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/current-session";
 
 export default async function PersonnelImportPage() {
   const session = await getCurrentSession();
